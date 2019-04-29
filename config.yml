@@ -1,0 +1,11 @@
+# Configuration file
+
+# Prokka
+prokka: prokka --outdir ANNOTATION_OUT --cpus 10 ANNOTATION_FAS --centre X --compliant
+
+# KOfam scan
+kofam: /mibi/users/russel/Software/kofam/exec_annotation --cpu=10 -o ANNOTATION_OUT --tmp-dir ANNOTATION_TMP ANNOTATION_FAS
+
+# dbCAN2
+dbcan: python /mibi/users/russel/Software/run_dbcan/run_dbcan.py --out_dir ANNOTATION_OUT --db_dir /mibi/users/russel/Databases/dbcan2 -c ANNOTATION_GFF ANNOTATION_FAS protein
+

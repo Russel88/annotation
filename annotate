@@ -1,0 +1,141 @@
+#!/bin/bash
+
+# Master script for running annotation pipeline
+
+# Usage message
+usage() { printf "... Annotation pipeline ...\n...... Version 0.0.1 ......\n....... Jakob Russel ......\n......... 2019 May ........\n
+Usage:\n $0 [-i my.fasta] [-o my/output/dir]\n
+\nOptional arguments:
+[-c /path/to/config/file]
+[-r] resume (e.g. to add new annotation software)
+[-k <e-value>] runs KOfam scan
+[-e] runs eggnog
+[-d] runs dbcan2 (for CAZymes)
+\n" 1>&2; exit 1; }
+
+# Get arguments
+while getopts ":o:i:c:k:rde" opt
+do
+  case $opt in
+    o) OUT="$OPTARG";;
+    i) FAS="$OPTARG";;
+    c) CONFIG="$OPTARG";;
+    r) RESUME=true;;
+    k) KOFAM="$OPTARG";;
+    d) DBCAN=true;;
+    e) EGGNOG=true;;
+    :) echo "Missing option argument for -$OPTARG"; usage;;
+    *) usage;;
+  esac
+done
+
+shift $((OPTIND-1))
+
+# Check arguments
+if [ -z "${OUT}" ] || [ -z "${FAS}" ]
+then
+    usage
+fi
+
+if [ -z "${CONFIG}" ]
+then
+    CONFIG="/mibi/users/russel/Software/annotation/config.yml"
+fi
+
+# Check output dir
+if [ -d "$OUT" ] && ! [ "$RESUME" ]
+then
+    	echo "Output directory already exists! Terminating"
+	exit 1
+else
+	mkdir -p $OUT
+fi
+
+# Run Prokka
+if [ -d "$OUT/prokka" ]
+then
+	echo "prokka has already been run. Skipping"
+else
+	echo "Running Prokka"
+	THIS=$(grep "prokka: " $CONFIG \
+        	| awk '{$1=""; print $0}' \
+        	| sed "s@ANNOTATION_OUT@${OUT}/prokka@;s@ANNOTATION_FAS@${FAS}@")
+	$THIS
+fi
+
+# Run KOfam scan
+if ! [ -z "$KOFAM" ]
+then
+	if [ -d "$OUT/kofam" ]
+	then
+		echo "KOfam scan has already been run. Skipping"
+	else
+		mkdir ${OUT}/tmp
+		echo "Running KOfam scan"
+		THIS=$(grep "kofam: " $CONFIG \
+	        	| awk '{$1=""; print $0}' \
+	        	| sed "s@ANNOTATION_OUT@${OUT}/results@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_TMP@${OUT}/tmp@")
+		$THIS
+		mkdir ${OUT}/kofam
+		mv ${OUT}/results ${OUT}/kofam/results
+		mv ${OUT}/tmp/tabular/ ${OUT}/kofam
+	fi
+fi
+
+# Run dbCAN2
+if [ "$DBCAN" ]
+then
+        if [ -d "$OUT/dbcan2" ]
+        then
+                echo "dbCAN2 has already been run. Skipping"
+        else
+                echo "Running dbCAN2"
+		grep "ID=" ${OUT}/prokka/*\.gff > ${OUT}/prokka/*\.gff2
+                THIS=$(grep "dbcan: " $CONFIG \
+                        | awk '{$1=""; print $0}' \
+                        | sed "s@ANNOTATION_OUT@${OUT}/dbcan2@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_GFF@${OUT}/prokka/*\.gff2@")
+                $THIS
+        fi
+fi
+
+### Put things together
+echo "Making combined table"
+# Prokka
+grep "ID=" ${OUT}/prokka/*.gff \
+	| awk -F'\t' '{print $9}' \
+	| awk -F";" 'BEGIN {OFS="\t"}{for(i=1;i<=NF;i++){if ($i ~ /product=/){print $1,$i}}}' \
+	| sed 's/ID=//;s/product=//' > ${OUT}/pa
+cp ${OUT}/pa ${OUT}/temp.tab
+
+HEADER="#CDS\tAnnotation_prokka"
+
+# KOfam
+if ! [ -z "$KOFAM" ]
+then
+	/mibi/users/russel/Software/kofam/kofam_sub ${OUT}/kofam/results ${KOFAM} > ${OUT}/kofam/best_hit
+	awk '{print $1=$2=$3=$4=$5=""; print $0}' ${OUT}/kofam/best_hit \
+		| awk 'NF>0' \
+		| paste <(awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/kofam/best_hit) - > ${OUT}/ka
+
+	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/pa ${OUT}/ka > ${OUT}/temp.tab
+	rm ${OUT}/ka
+	HEADER=${HEADER}"\tKO_KOfam\tAnnotation_KOfam"
+fi
+
+# dbCAN2
+if [ "$DBCAN" ]
+then
+	Rscript /mibi/users/russel/Software/annotation/parse_cazy.R ${OUT}/dbcan2/overview.txt | tail -n +2 | sort -k1,1 | awk 'BEGIN {OFS="\t"}{print $1,$2}' > ${OUT}/da
+        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/da > ${OUT}/temp1.tab
+        rm ${OUT}/da
+	mv ${OUT}/temp1.tab ${OUT}/temp.tab
+        HEADER=${HEADER}"\tCAZy"
+fi
+
+rm ${OUT}/pa
+### Adding headers
+cat <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/overview.tab
+rm ${OUT}/temp.tab
+
+echo "Done!"
+
