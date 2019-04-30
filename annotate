@@ -9,9 +9,6 @@ usage() { printf "
 ......... Jakob Russel ........
 ........... 2019 May ..........
 
-Use this script in a conda environment:
-conda activate /mibi/users/russel/Software/miniconda3/envs/annotation
-
 Usage:
  ./annotate [-i my.fasta] [-o /my/output/dir]
 
@@ -25,6 +22,7 @@ Arguments to add tools:
 [-e <e-value>] Adds eggNOG for KEGG orthologs and annotations. Choose e-value cutoff
 [-m <e-value>] Adds diamond search against MEROPS database for peptidase prediction. Choose e-value cutoff
 [-s <string>] Adds SignalP prediction. Choose organism: arch, gram+, or gram-
+[-a] Adds antiSMASH prediction for secondary metabolite production
 
 Example:
  ./annotate -i my.fasta -o /my/output/dir -r -k 1e-10 -m 1e-20 -s gram+ -d
@@ -34,12 +32,14 @@ GREEN=$(tput setaf 2)
 NORM=$(tput sgr0)
 
 CLI=$*
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 # Get arguments
 RESUME=false
 DBCAN=false
+ANTISMASH=false
 
-while getopts ":o:i:c:k:m:s:e:rd" opt
+while getopts ":o:i:c:k:m:s:e:rda" opt
 do
   case $opt in
     o) OUT="$OPTARG";;
@@ -51,6 +51,7 @@ do
     e) EGGNOG="$OPTARG";;
     m) MEROPS="$OPTARG";;
     s) SIGNALP="$OPTARG";;
+    a) ANTISMASH=true;;
     :) echo "Missing option argument for -$OPTARG"; usage;;
     *) usage;;
   esac
@@ -66,19 +67,18 @@ fi
 
 if [ -z "${CONFIG}" ]
 then
-    CONFIG="/mibi/users/russel/Software/annotation/config.yml"
+    CONFIG="${DIR}/config.yml"
 fi
 
 if ! [[ "${OUT}" == /* ]]
 then
-	echo "Output directory has to be the full path"
-	exit 1
+	OUT=${PWD}/${OUT}
 fi
 
 # Check output dir
 if [ -d "$OUT" ] && ! "$RESUME"
 then
-    	echo "Output directory already exists! Terminating"
+    	printf "Output directory already exists! Terminating\nUse [-r] argument to add tools to existing dir and/or remake output with new e-value cutoffs\n"
 	exit 1
 else
 	mkdir -p $OUT
@@ -180,7 +180,25 @@ then
         fi
 fi
 
-
+# Run antiSMASH
+if "$ANTISMASH"
+then
+        if [ -d "$OUT/antismash" ]
+        then
+                echo "${GREEN}antiSMASH has already been run. Skipping${NORM}"
+        else
+                mkdir ${OUT}/antismash
+                echo "${GREEN}Running antiSMASH${NORM}"
+		NEWPATH=$(grep "antismash_conda: " $CONFIG | awk '{$1=""; print $0}' | sed 's/ //')
+		echo "export PATH="$NEWPATH":$PATH" > $OUT/newpath.sh
+		source ${OUT}/newpath.sh
+		rm ${OUT}/newpath.sh
+                THIS=$(grep "antismash: " $CONFIG \
+                        | awk '{$1=""; print $0}' \
+                        | sed "s@ANNOTATION_OUT@${OUT}/antismash@;s@ANNOTATION_GBK@${OUT}/prokka/*\.gbk@")
+                $THIS
+        fi
+fi
 
 ### Put things together
 echo "Making combined table"
@@ -195,7 +213,10 @@ HEADER="#CDS\tAnnotation_prokka"
 # KOfam
 if ! [ -z "$KOFAM" ]
 then
-	/mibi/users/russel/Software/kofam/kofam_sub ${OUT}/kofam/results ${KOFAM} > ${OUT}/kofam/best_hit
+	sed 's/^*/ /' ${OUT}/kofam/results \
+        | tail -n +3 \
+        | awk -v e=${KOFAM} '$5 < e' \
+        | sort -k1,1 -u > ${OUT}/kofam/best_hit
 	awk '{print $1=$2=$3=$4=$5=""; print $0}' ${OUT}/kofam/best_hit \
 		| awk 'NF>0' \
 		| paste <(awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/kofam/best_hit) - > ${OUT}/ka
@@ -209,7 +230,7 @@ fi
 # dbCAN2
 if "$DBCAN"
 then
-	Rscript /mibi/users/russel/Software/annotation/parse_cazy.R ${OUT}/dbcan2/overview.txt | tail -n +2 | sort -k1,1 | awk 'BEGIN {OFS="\t"}{print $1,$2}' > ${OUT}/da1
+	Rscript ${DIR}/parse_cazy.R ${OUT}/dbcan2/overview.txt | tail -n +2 | sort -k1,1 | awk 'BEGIN {OFS="\t"}{print $1,$2}' > ${OUT}/da1
 	awk -F'\t' 'BEGIN {OFS="\t"}{print $9,$2}' ${OUT}/dbcan2/cgc.out | awk 'NF>0' | awk '$2 != "null"' | sort -k1,1  > ${OUT}/da2
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/da1 > ${OUT}/temp1.tab
 	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp1.tab ${OUT}/da2 > ${OUT}/temp.tab
@@ -247,6 +268,18 @@ then
         HEADER=${HEADER}"\tSignalP"
 fi
 
+# antiSMASH
+if "$ANTISMASH"
+then
+	awk -F'\t' '{print $3,$4}' ${OUT}/antismash/geneclusters.txt \
+		| awk '{print $1 "_" NR, $2}' \
+		| awk '{gsub(";","\n"$1"\t")}1' \
+		| awk 'BEGIN {OFS="\t"}{print $2,$1}' > ${OUT}/aa
+        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/aa > ${OUT}/temp1.tab
+        rm ${OUT}/aa
+        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+        HEADER=${HEADER}"\tantiSMASH"
+fi
 
 ### Adding headers
 cat <(printf "#./annotate ") <(echo ${CLI}) <(printf "#") <(date) <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/overview.tab
@@ -274,6 +307,9 @@ MEROPS: MEROPS identifier
 
 If SignalP added:
 SignalP: SignalP identifier
+
+If antiSMASH added:
+antiSMASH: Pred_X, where Pred is cluster prediction and X is a unique number for each cluster
 
 #### Versions ####
 KOfamScan 1.0.0

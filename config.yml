@@ -1,7 +1,6 @@
 ### Configuration file ###
 # Warning!
 # Do not change arguments with ANNOTATION_* 
-# Change this file on your own risk
 
 # Prokka
 prokka: prokka --outdir ANNOTATION_OUT --cpus 10 ANNOTATION_FAS --centre X --compliant
@@ -20,3 +19,7 @@ merops: diamond blastp --more-sensitive -d /mibi/users/russel/Databases/merops/m
 
 # signalp
 signalp: /mibi/users/russel/Software/signalp-5.0/bin/signalp -fasta ANNOTATION_FAS -org ANNOTATION_ORG -prefix ANNOTATION_OUT -tmp ANNOTATION_TMP
+
+# antiSMASH
+antismash_conda: /mibi/users/russel/Software/miniconda3/envs/antismash/bin/
+antismash: /mibi/users/russel/Software/miniconda3/envs/antismash/bin/antismash -c 10 ANNOTATION_GBK --outputfolder ANNOTATION_OUT
