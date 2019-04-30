@@ -3,18 +3,43 @@
 # Master script for running annotation pipeline
 
 # Usage message
-usage() { printf "... Annotation pipeline ...\n...... Version 0.0.1 ......\n....... Jakob Russel ......\n......... 2019 May ........\n
-Usage:\n $0 [-i my.fasta] [-o my/output/dir]\n
-\nOptional arguments:
-[-c /path/to/config/file]
-[-r] resume (e.g. to add new annotation software)
-[-k <e-value>] runs KOfam scan
-[-e] runs eggnog
-[-d] runs dbcan2 (for CAZymes)
-\n" 1>&2; exit 1; }
+usage() { printf "
+..... Annotation pipeline .....
+........ Version 0.0.1 ........
+......... Jakob Russel ........
+........... 2019 May ..........
+
+Use this script in a conda environment:
+conda activate /mibi/users/russel/Software/miniconda3/envs/annotation
+
+Usage:
+ ./annotate [-i my.fasta] [-o /my/output/dir]
+
+Optional arguments:
+[-c /path/to/alternative/config/file] Change the config.yml file to change specific options in the different tools (default: /mibi/users/russel/Software/annotation/config.yml)
+[-r] resume (e.g. to add new annotation tools or create new output table with different e-value cutoffs)
+
+Arguments to add tools:
+[-k <e-value>] Adds KOfam_scan for KEGG orthologs and annotations. Choose e-value cutoff
+[-d] Adds dbcan2 for CAZyme and CAZyme Gene Cluster (CGC) prediction
+[-e <e-value>] Adds eggNOG for KEGG orthologs and annotations. Choose e-value cutoff
+[-m <e-value>] Adds diamond search against MEROPS database for peptidase prediction. Choose e-value cutoff
+[-s <string>] Adds SignalP prediction. Choose organism: arch, gram+, or gram-
+
+Example:
+ ./annotate -i my.fasta -o /my/output/dir -r -k 1e-10 -m 1e-20 -s gram+ -d
+
+" 1>&2; exit 1; }
+GREEN=$(tput setaf 2)
+NORM=$(tput sgr0)
+
+CLI=$*
 
 # Get arguments
-while getopts ":o:i:c:k:rde" opt
+RESUME=false
+DBCAN=false
+
+while getopts ":o:i:c:k:m:s:e:rd" opt
 do
   case $opt in
     o) OUT="$OPTARG";;
@@ -23,7 +48,9 @@ do
     r) RESUME=true;;
     k) KOFAM="$OPTARG";;
     d) DBCAN=true;;
-    e) EGGNOG=true;;
+    e) EGGNOG="$OPTARG";;
+    m) MEROPS="$OPTARG";;
+    s) SIGNALP="$OPTARG";;
     :) echo "Missing option argument for -$OPTARG"; usage;;
     *) usage;;
   esac
@@ -42,8 +69,14 @@ then
     CONFIG="/mibi/users/russel/Software/annotation/config.yml"
 fi
 
+if ! [[ "${OUT}" == /* ]]
+then
+	echo "Output directory has to be the full path"
+	exit 1
+fi
+
 # Check output dir
-if [ -d "$OUT" ] && ! [ "$RESUME" ]
+if [ -d "$OUT" ] && ! "$RESUME"
 then
     	echo "Output directory already exists! Terminating"
 	exit 1
@@ -54,9 +87,10 @@ fi
 # Run Prokka
 if [ -d "$OUT/prokka" ]
 then
-	echo "prokka has already been run. Skipping"
+	echo "${GREEN}prokka has already been run. Skipping${NORM}"
 else
-	echo "Running Prokka"
+	mkdir ${OUT}/tmp
+	echo "${GREEN}Running Prokka${NORM}"
 	THIS=$(grep "prokka: " $CONFIG \
         	| awk '{$1=""; print $0}' \
         	| sed "s@ANNOTATION_OUT@${OUT}/prokka@;s@ANNOTATION_FAS@${FAS}@")
@@ -68,10 +102,9 @@ if ! [ -z "$KOFAM" ]
 then
 	if [ -d "$OUT/kofam" ]
 	then
-		echo "KOfam scan has already been run. Skipping"
+		echo "${GREEN}KOfam scan has already been run. Skipping${NORM}"
 	else
-		mkdir ${OUT}/tmp
-		echo "Running KOfam scan"
+		echo "${GREEN}Running KOfam scan${NORM}"
 		THIS=$(grep "kofam: " $CONFIG \
 	        	| awk '{$1=""; print $0}' \
 	        	| sed "s@ANNOTATION_OUT@${OUT}/results@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_TMP@${OUT}/tmp@")
@@ -83,20 +116,71 @@ then
 fi
 
 # Run dbCAN2
-if [ "$DBCAN" ]
+if "$DBCAN"
 then
         if [ -d "$OUT/dbcan2" ]
         then
-                echo "dbCAN2 has already been run. Skipping"
+                echo "${GREEN}dbCAN2 has already been run. Skipping${NORM}"
         else
-                echo "Running dbCAN2"
-		grep "ID=" ${OUT}/prokka/*\.gff > ${OUT}/prokka/*\.gff2
+                echo "${GREEN}Running dbCAN2${NORM}"
+		grep "ID=" ${OUT}/prokka/*\.gff > ${OUT}/prokka/trimmed.gff2
+		mkdir ${OUT}/dbcan2
                 THIS=$(grep "dbcan: " $CONFIG \
                         | awk '{$1=""; print $0}' \
-                        | sed "s@ANNOTATION_OUT@${OUT}/dbcan2@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_GFF@${OUT}/prokka/*\.gff2@")
+                        | sed "s@ANNOTATION_OUT@${OUT}/dbcan2@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_GFF@${OUT}/prokka/trimmed.gff2@")
                 $THIS
         fi
 fi
+
+# Run eggNOG
+if ! [ -z "$EGGNOG" ]
+then
+        if [ -d "$OUT/eggnog" ]
+        then
+                echo "${GREEN}eggNOG-mapper has already been run. Skipping${NORM}"
+        else
+                echo "${GREEN}Running eggNOG-mapper. Warning! This is slow!${NORM}"
+                mkdir ${OUT}/eggnog
+                THIS=$(grep "eggnog: " $CONFIG \
+                        | awk '{$1=""; print $0}' \
+                        | sed "s@ANNOTATION_OUT@${OUT}/eggnog@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_TMP@${OUT}/tmp@")
+                $THIS
+        fi
+fi
+
+# Run MEROPS
+if ! [ -z "$MEROPS" ]
+then
+        if [ -d "$OUT/merops" ]
+        then
+                echo "${GREEN}Merops search has already been run. Skipping${NORM}"
+        else
+		mkdir ${OUT}/merops
+                echo "${GREEN}Running diamond search against MEROPS${NORM}"
+                THIS=$(grep "merops: " $CONFIG \
+                        | awk '{$1=""; print $0}' \
+                        | sed "s@ANNOTATION_OUT@${OUT}/merops/matches.m8@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@")
+                $THIS
+        fi
+fi
+
+# Run SignalP
+if ! [ -z "$SIGNALP" ]
+then
+        if [ -d "$OUT/signalp" ]
+        then
+                echo "${GREEN}SignalP has already been run. Skipping${NORM}"
+        else
+                mkdir ${OUT}/signalp
+                echo "${GREEN}Running SignalP${NORM}"
+                THIS=$(grep "signalp: " $CONFIG \
+                        | awk '{$1=""; print $0}' \
+                        | sed "s@ANNOTATION_OUT@${OUT}/signalp/output@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_ORG@${SIGNALP}@;s@ANNOTATION_TMP@${OUT}/tmp@")
+                $THIS
+        fi
+fi
+
+
 
 ### Put things together
 echo "Making combined table"
@@ -104,8 +188,7 @@ echo "Making combined table"
 grep "ID=" ${OUT}/prokka/*.gff \
 	| awk -F'\t' '{print $9}' \
 	| awk -F";" 'BEGIN {OFS="\t"}{for(i=1;i<=NF;i++){if ($i ~ /product=/){print $1,$i}}}' \
-	| sed 's/ID=//;s/product=//' > ${OUT}/pa
-cp ${OUT}/pa ${OUT}/temp.tab
+	| sed 's/ID=//;s/product=//' > ${OUT}/temp.tab
 
 HEADER="#CDS\tAnnotation_prokka"
 
@@ -117,25 +200,98 @@ then
 		| awk 'NF>0' \
 		| paste <(awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/kofam/best_hit) - > ${OUT}/ka
 
-	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/pa ${OUT}/ka > ${OUT}/temp.tab
+	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ka > ${OUT}/temp1.tab
+	mv ${OUT}/temp1.tab ${OUT}/temp.tab
 	rm ${OUT}/ka
 	HEADER=${HEADER}"\tKO_KOfam\tAnnotation_KOfam"
 fi
 
 # dbCAN2
-if [ "$DBCAN" ]
+if "$DBCAN"
 then
-	Rscript /mibi/users/russel/Software/annotation/parse_cazy.R ${OUT}/dbcan2/overview.txt | tail -n +2 | sort -k1,1 | awk 'BEGIN {OFS="\t"}{print $1,$2}' > ${OUT}/da
-        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/da > ${OUT}/temp1.tab
-        rm ${OUT}/da
-	mv ${OUT}/temp1.tab ${OUT}/temp.tab
-        HEADER=${HEADER}"\tCAZy"
+	Rscript /mibi/users/russel/Software/annotation/parse_cazy.R ${OUT}/dbcan2/overview.txt | tail -n +2 | sort -k1,1 | awk 'BEGIN {OFS="\t"}{print $1,$2}' > ${OUT}/da1
+	awk -F'\t' 'BEGIN {OFS="\t"}{print $9,$2}' ${OUT}/dbcan2/cgc.out | awk 'NF>0' | awk '$2 != "null"' | sort -k1,1  > ${OUT}/da2
+        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/da1 > ${OUT}/temp1.tab
+	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp1.tab ${OUT}/da2 > ${OUT}/temp.tab
+        rm ${OUT}/da1 ${OUT}/da2
+        HEADER=${HEADER}"\tCAZy\tCGC"
 fi
 
-rm ${OUT}/pa
+# eggNOG
+if ! [ -z "$EGGNOG" ]
+then
+	grep -v '^#' ${OUT}/eggnog/annotation.emapper.annotations | awk -v k="$EGGNOG" '$3<k' | awk -F'\t' 'BEGIN { OFS = "\t" }{print $1, $9, $6}' | sed 's/ko://g' > ${OUT}/ea
+        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ea > ${OUT}/temp1.tab
+        rm ${OUT}/ea
+        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+        HEADER=${HEADER}"\tKO_eggNOG\tAnnotation_eggNOG"
+fi
+
+# Merops
+if ! [ -z "$MEROPS" ]
+then
+	awk -v k=${MEROPS} '$11<k' ${OUT}/merops/matches.m8 | sort -k1,1 -k11,11g | sort -u -k1,1 | awk 'BEGIN {OFS="\t"}{print $1,$2}' > ${OUT}/ma
+        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ma > ${OUT}/temp1.tab
+        rm ${OUT}/ma
+        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+        HEADER=${HEADER}"\tMEROPS"
+fi
+
+# SignalP
+if ! [ -z "$SIGNALP" ]
+then
+	awk '$2!="OTHER"' ${OUT}/signalp/output_summary.signalp5 | awk 'BEGIN {OFS="\t"}{print $1,$2}' > ${OUT}/sa
+        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/sa > ${OUT}/temp1.tab
+        rm ${OUT}/sa
+        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+        HEADER=${HEADER}"\tSignalP"
+fi
+
+
 ### Adding headers
-cat <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/overview.tab
+cat <(printf "#./annotate ") <(echo ${CLI}) <(printf "#") <(date) <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/overview.tab
 rm ${OUT}/temp.tab
 
-echo "Done!"
+# Make README
+printf "#### HEADERS ####
+CDS: Gene name given by prokka
+Annotation_prokka: Annotation by prokka
+
+If KOfam added:
+KO_KOfam: KEGG Ortholog predicted by KOfam_scan
+Annotaion_KOfam: Annotation by KOfam_scan
+
+If dbCAN2 added:
+CAZy: CAZyme family ID predicted by at least two tools in dbCAN2
+CGC: Annotation by CAZyme-Gene-Cluster (CGC) predictor. TP=TransPorter, TC=TransCription factor, STP=Signal Transduction Protein, CAZyme=CAZymes potentially part of CGC
+
+If eggNOG added:
+KO_eggNOG: KEGG Ortholog predicted by eggNOG-mapper
+Annotation_eggNOG: Annotation predicted by eggNOG-mapper
+
+If MEROPS added:
+MEROPS: MEROPS identifier
+
+If SignalP added:
+SignalP: SignalP identifier
+
+#### Versions ####
+KOfamScan 1.0.0
+KEGG release 90.0
+
+run_dbcan 2.0
+Database from Apr 4th 2019
+
+emapper-1.0.3-33-g70ff1ab
+Database from Mar 19th 2019
+
+MEROPS release 12.0
+
+SignalP 5.0
+
+Remaining version can be found by running: conda list
+
+" > ${OUT}/README.txt
+
+echo "${GREEN}Done!${NORM}"
 

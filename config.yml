@@ -1,4 +1,7 @@
-# Configuration file
+### Configuration file ###
+# Warning!
+# Do not change arguments with ANNOTATION_* 
+# Change this file on your own risk
 
 # Prokka
 prokka: prokka --outdir ANNOTATION_OUT --cpus 10 ANNOTATION_FAS --centre X --compliant
@@ -9,3 +12,11 @@ kofam: /mibi/users/russel/Software/kofam/exec_annotation --cpu=10 -o ANNOTATION_
 # dbCAN2
 dbcan: python /mibi/users/russel/Software/run_dbcan/run_dbcan.py --out_dir ANNOTATION_OUT --db_dir /mibi/users/russel/Databases/dbcan2 -c ANNOTATION_GFF ANNOTATION_FAS protein
 
+# eggNOG
+eggnog: python2 /mibi/users/russel/Software/eggnog-mapper/emapper.py --cpu 10 -m diamond --data_dir /mibi/users/russel/Databases/eggnog --dmnd_db /mibi/users/russel/Databases/eggnog/eggnog_proteins.dmnd --output_dir ANNOTATION_OUT --temp_dir ANNOTATION_TMP -i ANNOTATION_FAS -o annotation
+
+# MEROPS
+merops: diamond blastp --more-sensitive -d /mibi/users/russel/Databases/merops/merops -q ANNOTATION_FAS -o ANNOTATION_OUT
+
+# signalp
+signalp: /mibi/users/russel/Software/signalp-5.0/bin/signalp -fasta ANNOTATION_FAS -org ANNOTATION_ORG -prefix ANNOTATION_OUT -tmp ANNOTATION_TMP
