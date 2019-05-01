@@ -17,15 +17,16 @@ Optional arguments:
 [-r] resume (e.g. to add new annotation tools or create new output table with different e-value cutoffs)
 
 Arguments to add tools:
-[-k <e-value>] Adds KOfam_scan for KEGG orthologs and annotations. Choose e-value cutoff
 [-d] Adds dbcan2 for CAZyme and CAZyme Gene Cluster (CGC) prediction
 [-e <e-value>] Adds eggNOG for KEGG orthologs and annotations. Choose e-value cutoff
+[-n] Adds RGI for Antibiotic resistance prediction against CARD
 [-m <e-value>] Adds diamond search against MEROPS database for peptidase prediction. Choose e-value cutoff
-[-s <string>] Adds SignalP prediction. Choose organism: arch, gram+, or gram-
 [-a] Adds antiSMASH prediction for secondary metabolite production
+[-k <e-value>] Adds KOfam_scan for KEGG orthologs and annotations. Choose e-value cutoff
+[-s <string>] Adds SignalP prediction. Choose organism: arch, gram+, or gram-
 
 Example:
- ./annotate -i my.fasta -o /my/output/dir -r -k 1e-10 -m 1e-20 -s gram+ -d
+ ./annotate -i my.fasta -o /my/output/dir -d -e 1e-10 -n -m 1e-20 -a -r -k 1e-10 -s gram+
 
 " 1>&2; exit 1; }
 GREEN=$(tput setaf 2)
@@ -38,8 +39,9 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 RESUME=false
 DBCAN=false
 ANTISMASH=false
+RGI=false
 
-while getopts ":o:i:c:k:m:s:e:rda" opt
+while getopts ":o:i:c:k:m:s:e:rdan" opt
 do
   case $opt in
     o) OUT="$OPTARG";;
@@ -52,6 +54,7 @@ do
     m) MEROPS="$OPTARG";;
     s) SIGNALP="$OPTARG";;
     a) ANTISMASH=true;;
+    n) RGI=true;;
     :) echo "Missing option argument for -$OPTARG"; usage;;
     *) usage;;
   esac
@@ -85,7 +88,7 @@ else
 fi
 
 # Run Prokka
-if [ -d "$OUT/prokka" ]
+if [ -d "${OUT}/prokka" ]
 then
 	echo "${GREEN}prokka has already been run. Skipping${NORM}"
 else
@@ -95,6 +98,12 @@ else
         	| awk '{$1=""; print $0}' \
         	| sed "s@ANNOTATION_OUT@${OUT}/prokka@;s@ANNOTATION_FAS@${FAS}@")
 	$THIS
+fi
+
+if ! [ -f "${OUT}/prokka/"*.faa ]
+then
+	echo Prokka failed. Terminating
+	exit 1
 fi
 
 # Run KOfam scan
@@ -200,27 +209,51 @@ then
         fi
 fi
 
+# Run RGI
+if "$RGI"
+then
+        if [ -d "$OUT/rgi" ]
+        then
+                echo "${GREEN}RGI(CARD) has already been run. Skipping${NORM}"
+        else
+                mkdir ${OUT}/rgi
+                echo "${GREEN}Running RGI(CARD)${NORM}"
+                THIS=$(grep "rgi: " $CONFIG \
+                        | awk '{$1=""; print $0}' \
+                        | sed "s@ANNOTATION_OUT@${OUT}/rgi/card@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@")
+                $THIS
+        fi
+fi
+
 ### Put things together
-echo "Making combined table"
+echo "${GREEN}Parsing output${NORM}"
+mkdir -p ${OUT}/parsed_tables
+
 # Prokka
 grep "ID=" ${OUT}/prokka/*.gff \
 	| awk -F'\t' '{print $9}' \
 	| awk -F";" 'BEGIN {OFS="\t"}{for(i=1;i<=NF;i++){if ($i ~ /product=/){print $1,$i}}}' \
-	| sed 's/ID=//;s/product=//' > ${OUT}/temp.tab
-
+	| sed 's/ID=//;s/product=//' > ${OUT}/parsed_tables/prokka.tab
+cp ${OUT}/parsed_tables/prokka.tab ${OUT}/temp.tab
 HEADER="#CDS\tAnnotation_prokka"
 
 # KOfam
 if ! [ -z "$KOFAM" ]
 then
 	sed 's/^*/ /' ${OUT}/kofam/results \
-        | tail -n +3 \
-        | awk -v e=${KOFAM} '$5 < e' \
-        | sort -k1,1 -u > ${OUT}/kofam/best_hit
-	awk '{print $1=$2=$3=$4=$5=""; print $0}' ${OUT}/kofam/best_hit \
-		| awk 'NF>0' \
-		| paste <(awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/kofam/best_hit) - > ${OUT}/ka
+        	| tail -n +3 \
+		| awk 'BEGIN {OFS="\t"}1' \
+		| sort -k1,1 -u > ${OUT}/parsed_tables/kofam.tab
 
+	awk -v e=${KOFAM} '$5 < e' ${OUT}/parsed_tables/kofam.tab > ${OUT}/temp1.tab
+	if ! [ -s "${OUT}/temp1.tab" ]
+        then
+                printf "X_00001\tNA\n\tNA" > ${OUT}/ka
+	else
+		awk '{print $1=$2=$3=$4=$5=""; print $0}' ${OUT}/temp1.tab \
+                | awk 'NF>0' \
+                | paste <(awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/temp1.tab) - > ${OUT}/ka
+        fi
 	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ka > ${OUT}/temp1.tab
 	mv ${OUT}/temp1.tab ${OUT}/temp.tab
 	rm ${OUT}/ka
@@ -230,18 +263,38 @@ fi
 # dbCAN2
 if "$DBCAN"
 then
-	Rscript ${DIR}/parse_cazy.R ${OUT}/dbcan2/overview.txt | tail -n +2 | sort -k1,1 | awk 'BEGIN {OFS="\t"}{print $1,$2}' > ${OUT}/da1
-	awk -F'\t' 'BEGIN {OFS="\t"}{print $9,$2}' ${OUT}/dbcan2/cgc.out | awk 'NF>0' | awk '$2 != "null"' | sort -k1,1  > ${OUT}/da2
-        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/da1 > ${OUT}/temp1.tab
-	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp1.tab ${OUT}/da2 > ${OUT}/temp.tab
-        rm ${OUT}/da1 ${OUT}/da2
-        HEADER=${HEADER}"\tCAZy\tCGC"
+	if [[ $(wc -l <${OUT}/dbcan2/overview.txt) -gt 1 ]]
+	then
+		Rscript ${DIR}/parse_cazy.R ${OUT}/dbcan2/overview.txt ${OUT}/parsed_tables/dbcan2.tabx
+        	sort -k1,1 ${OUT}/parsed_tables/dbcan2.tabx | awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/dbcan2.tab
+		rm ${OUT}/parsed_tables/dbcan2.tabx
+        	awk '$7 > 1' ${OUT}/parsed_tables/dbcan2.tab | awk 'BEGIN {OFS="\t"}{print $1,$6}' > ${OUT}/da1
+        	awk -F'\t' 'BEGIN {OFS="\t"}{print $9,$2}' ${OUT}/dbcan2/cgc.out \
+                	| awk 'NF>0' \
+                	| awk '$2 != "null"' \
+                	| sort -k1,1  > ${OUT}/da2
+	else
+		printf "X_00001\tNA\n" > ${OUT}/da1
+		printf "X_00001\tNA\n" > ${OUT}/da2
+		touch ${OUT}/parsed_tables/dbcan2.tab
+	fi
+	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/da1 > ${OUT}/temp1.tab
+        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp1.tab ${OUT}/da2 > ${OUT}/temp.tab
+        rm ${OUT}/da1 ${OUT}/da2 ${OUT}/temp1.tab
+	HEADER=${HEADER}"\tCAZy\tCGC"
 fi
 
 # eggNOG
 if ! [ -z "$EGGNOG" ]
 then
-	grep -v '^#' ${OUT}/eggnog/annotation.emapper.annotations | awk -v k="$EGGNOG" '$3<k' | awk -F'\t' 'BEGIN { OFS = "\t" }{print $1, $9, $6}' | sed 's/ko://g' > ${OUT}/ea
+	grep -v '^#' ${OUT}/eggnog/annotation.emapper.annotations \
+		| sed 's/ko://g' > $OUT/parsed_tables/eggnog.tab
+	awk -v k="$EGGNOG" '$3<k' $OUT/parsed_tables/eggnog.tab \
+		| awk -F'\t' 'BEGIN { OFS = "\t" }{print $1, $9, $6}' > ${OUT}/ea
+        if ! [ -s "${OUT}/ea" ]
+        then
+                printf "X_00001\tNA\tNA\n" > ${OUT}/ea
+        fi
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ea > ${OUT}/temp1.tab
         rm ${OUT}/ea
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
@@ -251,8 +304,15 @@ fi
 # Merops
 if ! [ -z "$MEROPS" ]
 then
-	awk -v k=${MEROPS} '$11<k' ${OUT}/merops/matches.m8 | sort -k1,1 -k11,11g | sort -u -k1,1 | awk 'BEGIN {OFS="\t"}{print $1,$2}' > ${OUT}/ma
-        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ma > ${OUT}/temp1.tab
+	sort -k1,1 -k11,11g ${OUT}/merops/matches.m8 \
+		| sort -u -k1,1 \
+		| awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/merops.tab
+	awk -v k=${MEROPS} 'BEGIN {OFS="\t"} $11<k {print $1,$2}' ${OUT}/parsed_tables/merops.tab > ${OUT}/ma
+	if ! [ -s "${OUT}/ma" ]
+        then
+                printf "X_00001\tNA\n" > ${OUT}/ma
+        fi
+	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ma > ${OUT}/temp1.tab
         rm ${OUT}/ma
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
         HEADER=${HEADER}"\tMEROPS"
@@ -261,7 +321,9 @@ fi
 # SignalP
 if ! [ -z "$SIGNALP" ]
 then
-	awk '$2!="OTHER"' ${OUT}/signalp/output_summary.signalp5 | awk 'BEGIN {OFS="\t"}{print $1,$2}' > ${OUT}/sa
+	grep -v '^#' ${OUT}/signalp/output_summary.signalp5 \
+		| awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/signalp.tab
+	awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/parsed_tables/signalp.tab > ${OUT}/sa
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/sa > ${OUT}/temp1.tab
         rm ${OUT}/sa
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
@@ -271,22 +333,49 @@ fi
 # antiSMASH
 if "$ANTISMASH"
 then
-	awk -F'\t' '{print $3,$4}' ${OUT}/antismash/geneclusters.txt \
-		| awk '{print $1 "_" NR, $2}' \
-		| awk '{gsub(";","\n"$1"\t")}1' \
-		| awk 'BEGIN {OFS="\t"}{print $2,$1}' > ${OUT}/aa
+	if ! [ -z ${OUT}/antismash/geneclusters.txt ]
+	then
+		printf "X_00001\tNA\n" > ${OUT}/aa
+	else
+		awk -F'\t' '{print $3,$4}' ${OUT}/antismash/geneclusters.txt \
+			| awk '{print $1 "_" NR, $2}' \
+			| awk '{gsub(";","\n"$1"\t")}1' \
+			| awk 'BEGIN {OFS="\t"}{print $2,$1}' > ${OUT}/aa
+		sed 's/_\([0-9]*\)$/\t\1/' ${OUT}/aa > ${OUT}/parsed_tables/antismash.tab
+	fi
+	if ! [ -s "${OUT}/aa" ]
+	then
+		printf "X_00001\tNA\n" > ${OUT}/aa
+	fi
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/aa > ${OUT}/temp1.tab
         rm ${OUT}/aa
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
         HEADER=${HEADER}"\tantiSMASH"
 fi
 
+# RGI
+if "$RGI"
+then
+	if [[ $(wc -l <${OUT}/rgi/card.txt) -gt 1 ]]
+	then
+		tail -n+2 ${OUT}/rgi/card.txt \
+			| awk -F'\t' 'BEGIN {OFS="\t"}{print $1,$2}' \
+			| sort -k1,1 > ${OUT}/parsed_tables/rgi.tab
+	else
+		printf "X_00001\tNA\n" > ${OUT}/parsed_tables/rgi.tab
+	fi
+        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/parsed_tables/rgi.tab > ${OUT}/temp1.tab
+        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+        HEADER=${HEADER}"\tRGI"
+fi
+
+
 ### Adding headers
 cat <(printf "#./annotate ") <(echo ${CLI}) <(printf "#") <(date) <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/overview.tab
 rm ${OUT}/temp.tab
 
 # Make README
-printf "#### HEADERS ####
+printf "#### HEADERS overview.tab ####
 CDS: Gene name given by prokka
 Annotation_prokka: Annotation by prokka
 
@@ -296,7 +385,7 @@ Annotaion_KOfam: Annotation by KOfam_scan
 
 If dbCAN2 added:
 CAZy: CAZyme family ID predicted by at least two tools in dbCAN2
-CGC: Annotation by CAZyme-Gene-Cluster (CGC) predictor. TP=TransPorter, TC=TransCription factor, STP=Signal Transduction Protein, CAZyme=CAZymes potentially part of CGC
+CGC: Annotation by CAZyme-Gene-Cluster (CGC) predictor. TP=TransPorter, TC=TransCription factor, STP=Signal Transduction Protein, CAZyme=CAZymes part of CGC
 
 If eggNOG added:
 KO_eggNOG: KEGG Ortholog predicted by eggNOG-mapper
@@ -310,6 +399,103 @@ SignalP: SignalP identifier
 
 If antiSMASH added:
 antiSMASH: Pred_X, where Pred is cluster prediction and X is a unique number for each cluster
+
+If RGI(CARD) added:
+RGI: Prediction from RGI(CARD)
+
+#### HEADERS parsed_tables ####
+# prokka:
+CDS
+Annotation
+
+# kofam:
+CDS
+KEGG Ortholog
+Match length
+Similarity
+E-value
+Annotation
+
+# dbcan2:
+CDS
+HMMER annotation
+HotPep annotation
+Diamond annotation
+Consensus annotation
+Consensus size (# Tools)
+
+# eggnog:
+CDS
+seed_eggNOG_ortholog
+seed_ortholog_evalue
+seed_ortholog_score
+best_tax_level
+Preferred_name
+GOs
+EC
+KEGG_ko
+KEGG_Pathway
+KEGG_Module
+KEGG_Reaction
+KEGG_rclass
+BRITE
+KEGG_TC
+CAZy
+BiGG_Reaction
+Kingdom
+?
+?
+?
+Description
+
+# merops:
+CDS
+MEROPS ID
+Percent identical
+Alignment length
+Number of mismatches
+Number of gaps
+Start of query
+End of query
+Start of alignment in subject
+End of alignment in subject
+E-value
+Bitscore
+
+# signalp:
+CDS
+Annotation
+SP probability
+TAT probability
+LIPO probability
+OTHER probability
+Cleavage site (CS)
+
+# antismash:
+CDS
+antiSMASH annotation
+Cluster ID
+
+# rgi
+CDS
+Contig
+Start
+Stop
+Orientation
+Cut_Off Pass_Bitscore
+Best_Hit_Bitscore
+Best_Hit_ARO
+Best_IdentitiesARO
+Model_type
+SNPs_in_Best_Hit_ARO
+Other_SNPs
+Drug Class
+Resistance Mechanism
+AMR Gene Family Predicted_DN
+Predicted_Protein
+CARD_Protein_Sequence
+Percentage Length of Reference Sequence ID
+Model_ID
 
 #### Versions ####
 KOfamScan 1.0.0
@@ -325,7 +511,7 @@ MEROPS release 12.0
 
 SignalP 5.0
 
-Remaining version can be found by running: conda list
+Remaining version can be found in the environment.yml
 
 " > ${OUT}/README.txt
 

@@ -3,7 +3,7 @@
 # Do not change arguments with ANNOTATION_* 
 
 # Prokka
-prokka: prokka --outdir ANNOTATION_OUT --cpus 10 ANNOTATION_FAS --centre X --compliant
+prokka: prokka --outdir ANNOTATION_OUT --cpus 10 ANNOTATION_FAS --centre X --locustag X
 
 # KOfam scan
 kofam: /mibi/users/russel/Software/kofam/exec_annotation --cpu=10 -o ANNOTATION_OUT --tmp-dir ANNOTATION_TMP ANNOTATION_FAS
@@ -23,3 +23,6 @@ signalp: /mibi/users/russel/Software/signalp-5.0/bin/signalp -fasta ANNOTATION_F
 # antiSMASH
 antismash_conda: /mibi/users/russel/Software/miniconda3/envs/antismash/bin/
 antismash: /mibi/users/russel/Software/miniconda3/envs/antismash/bin/antismash -c 10 ANNOTATION_GBK --outputfolder ANNOTATION_OUT
+
+# RGI (CARD)
+rgi: rgi main -n 10 -i ANNOTATION_FAS -o ANNOTATION_OUT -t protein --clean -a DIAMOND

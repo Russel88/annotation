@@ -1,6 +1,6 @@
 # Load
 df <- read.table(commandArgs(TRUE)[1], header = TRUE)
-colnames(df) <- c(colnames(df)[2:6],"Tools")
+colnames(df) <- c(colnames(df)[2:5],"Tools")
 df.sub <- df[df$Tools > 1,]
 
 # Consensus
@@ -27,11 +27,10 @@ if(nrow(no.cons) > 0){
     no.cons$Cons.size <- unlist(maxf2)
     
     # Final
-    final <- rbind(df.sub[df.sub$Cons.size > 1, ],
-                   no.cons[no.cons$Cons.size > 1, ])
+    final <- rbind(df.sub[df.sub$Cons.size > 1, ], no.cons)
 } else {
-    final <- df.sub[df.sub$Cons.size > 1, ]
+    final <- df.sub
 }
 
-print(final[, c(1,7)], row.names = FALSE)
+write.table(final[, -6], file = commandArgs(TRUE)[2], row.names = FALSE, col.names = FALSE, quote = FALSE)
 
