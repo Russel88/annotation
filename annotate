@@ -160,7 +160,7 @@ fi
 # Run MEROPS
 if ! [ -z "$MEROPS" ]
 then
-        if [ -d "$OUT/merops" ]
+	if [ -d "$OUT/merops" ]
         then
                 echo "${GREEN}Merops search has already been run. Skipping${NORM}"
         else
@@ -176,6 +176,10 @@ fi
 # Run SignalP
 if ! [ -z "$SIGNALP" ]
 then
+	case ${SIGNALP} in
+		arch|gram+|gram-) :  ;;
+		*) echo "Error. [-s] argument has to be one of arch|gram|gram-" && exit 1 ;;
+	esac
         if [ -d "$OUT/signalp" ]
         then
                 echo "${GREEN}SignalP has already been run. Skipping${NORM}"
@@ -375,7 +379,9 @@ cat <(printf "#./annotate ") <(echo ${CLI}) <(printf "#") <(date) <(printf ${HEA
 rm ${OUT}/temp.tab
 
 # Make README
-printf "#### HEADERS overview.tab ####
+printf "#### Version 0.0.1 ####
+
+#### HEADERS overview.tab ####
 CDS: Gene name given by prokka
 Annotation_prokka: Annotation by prokka
 
