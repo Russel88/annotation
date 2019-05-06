@@ -5,7 +5,7 @@
 # Usage message
 usage() { printf "
 ..... Annotation pipeline .....
-........ Version 0.0.1 ........
+........ Version 0.0.2 ........
 ......... Jakob Russel ........
 ........... 2019 May ..........
 
@@ -24,6 +24,8 @@ Arguments to add tools:
 [-a] Adds antiSMASH prediction for secondary metabolite production
 [-k <e-value>] Adds KOfam_scan for KEGG orthologs and annotations. Choose e-value cutoff
 [-s <string>] Adds SignalP prediction. Choose organism: arch, gram+, or gram-
+[-t <e-value>] Adds Transposase prediction (TnpPred). Choose e-value cutoff
+[-x <e-value>] Adds CasFinder for CRISPR-associated gene prediction. Choose e-value cutoff
 
 Example:
  ./annotate -i my.fasta -o /my/output/dir -d -e 1e-10 -n -m 1e-20 -a -r -k 1e-10 -s gram+
@@ -41,7 +43,7 @@ DBCAN=false
 ANTISMASH=false
 RGI=false
 
-while getopts ":o:i:c:k:m:s:e:rdan" opt
+while getopts ":o:i:c:k:m:s:e:t:x:rdan" opt
 do
   case $opt in
     o) OUT="$OPTARG";;
@@ -55,6 +57,8 @@ do
     s) SIGNALP="$OPTARG";;
     a) ANTISMASH=true;;
     n) RGI=true;;
+    t) TNPPRED="$OPTARG";;
+    x) CAS="$OPTARG";;
     :) echo "Missing option argument for -$OPTARG"; usage;;
     *) usage;;
   esac
@@ -178,7 +182,7 @@ if ! [ -z "$SIGNALP" ]
 then
 	case ${SIGNALP} in
 		arch|gram+|gram-) :  ;;
-		*) echo "Error. [-s] argument has to be one of arch|gram|gram-" && exit 1 ;;
+		*) echo "Error. [-s] argument has to be one of arch|gram+|gram-" && exit 1 ;;
 	esac
         if [ -d "$OUT/signalp" ]
         then
@@ -226,6 +230,42 @@ then
                         | awk '{$1=""; print $0}' \
                         | sed "s@ANNOTATION_OUT@${OUT}/rgi/card@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@")
                 $THIS
+        fi
+fi
+
+# Run TnpPred
+if ! [ -z "$TNPPRED" ]
+then
+        if [ -d "$OUT/tnppred" ]
+        then
+                echo "${GREEN}TnpPred has already been run. Skipping${NORM}"
+        else
+                mkdir ${OUT}/tnppred
+                echo "${GREEN}Running TnpPred${NORM}"
+                THIS=$(grep "tnppred: " $CONFIG \
+                        | awk '{$1=""; print $0}' \
+                        | sed "s@ANNOTATION_OUT@${OUT}/tnppred/output.tab@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_TMP@${OUT}/tnppred/hmmscan.txt@")
+		$THIS
+        fi
+fi
+
+# Run against CasFinder HMMs
+if ! [ -z "$CAS" ]
+then
+        if [ -d "$OUT/casfinder" ]
+        then
+                echo "${GREEN}CasFinder HMMs has already been searched. Skipping${NORM}"
+        else
+                mkdir -p ${OUT}/casfinder
+                echo "${GREEN}Running against CasFinder HMMs${NORM}"
+		export CASFAS=$(echo ${OUT}/prokka/*.faa)
+		export CASOUT=$(echo ${OUT}/casfinder)
+		doit() {
+		name=$(echo $1 | sed "s|.*\/||;s|\.hmm||")
+                hmmscan --tblout ${CASOUT}/${name}.tab -o ${CASOUT}/${name}.out $1 $CASFAS
+		}
+		export -f doit
+		parallel -j10 doit {} ::: /mibi/users/russel/Databases/casprofiles_2.0.2/*.hmm
         fi
 fi
 
@@ -294,15 +334,15 @@ then
 	grep -v '^#' ${OUT}/eggnog/annotation.emapper.annotations \
 		| sed 's/ko://g' > $OUT/parsed_tables/eggnog.tab
 	awk -v k="$EGGNOG" '$3<k' $OUT/parsed_tables/eggnog.tab \
-		| awk -F'\t' 'BEGIN { OFS = "\t" }{print $1, $9, $6}' > ${OUT}/ea
+		| awk -F'\t' 'BEGIN { OFS = "\t" }{print $1, $9, $5, $6}' > ${OUT}/ea
         if ! [ -s "${OUT}/ea" ]
         then
-                printf "X_00001\tNA\tNA\n" > ${OUT}/ea
+                printf "X_00001\tNA\tNA\nNA\n" > ${OUT}/ea
         fi
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ea > ${OUT}/temp1.tab
         rm ${OUT}/ea
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
-        HEADER=${HEADER}"\tKO_eggNOG\tAnnotation_eggNOG"
+        HEADER=${HEADER}"\tKO_eggNOG\tTax_eggNOG\tAnnotation_eggNOG"
 fi
 
 # Merops
@@ -373,6 +413,48 @@ then
         HEADER=${HEADER}"\tRGI"
 fi
 
+# TnpPred
+if ! [ -z "$TNPPRED" ]
+then
+	grep -v "^#" ${OUT}/tnppred/output.tab \
+		| sort -k3,3 -k5,5g \
+		| sort -k3,3 -u \
+		| awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/tnppred.tab
+        awk 'BEGIN {OFS="\t"}{print $3,$1,$5}' ${OUT}/parsed_tables/tnppred.tab\
+		| awk -v k="${TNPPRED}" 'BEGIN {OFS="\t"} $3<k {print $1,$2}' | sort -k1,1 > ${OUT}/ta
+	if ! [ -s "${OUT}/ta" ]
+        then
+                printf "X_00001\tNA\n" > ${OUT}/ta
+        fi
+        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ta > ${OUT}/temp1.tab
+        rm ${OUT}/ta
+        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+        HEADER=${HEADER}"\tTnpPred"
+fi
+
+# CasFinder
+if ! [ -z "$CAS" ]
+then
+        grep -v "^#" ${OUT}/casfinder/*.tab \
+                | sort -k3,3 -k5,5g \
+                | sort -k3,3 -u \
+                | awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/casfinder.tab
+        awk 'BEGIN {OFS="\t"}{print $3,$1,$5}' ${OUT}/parsed_tables/casfinder.tab\
+                | awk -v k="${CAS}" '$3<k {print $1,$2}' \
+		| sort -k1,1 \
+		| awk '{gsub(".tab.*","",$2)}1' \
+		| awk 'BEGIN {OFS="\t"}{gsub(".*/","",$2)}1'  > ${OUT}/xa
+        if ! [ -s "${OUT}/xa" ]
+        then
+                printf "X_00001\tNA\n" > ${OUT}/xa
+        fi
+        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/xa > ${OUT}/temp1.tab
+        rm ${OUT}/xa
+        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+        HEADER=${HEADER}"\tCasFinder"
+fi
+
+
 
 ### Adding headers
 cat <(printf "#./annotate ") <(echo ${CLI}) <(printf "#") <(date) <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/overview.tab
@@ -395,6 +477,7 @@ CGC: Annotation by CAZyme-Gene-Cluster (CGC) predictor. TP=TransPorter, TC=Trans
 
 If eggNOG added:
 KO_eggNOG: KEGG Ortholog predicted by eggNOG-mapper
+Tax_eggNOG: Best tax level
 Annotation_eggNOG: Annotation predicted by eggNOG-mapper
 
 If MEROPS added:
@@ -408,6 +491,12 @@ antiSMASH: Pred_X, where Pred is cluster prediction and X is a unique number for
 
 If RGI(CARD) added:
 RGI: Prediction from RGI(CARD)
+
+If TnpPred added:
+TnpPred: Prediction from hmmscan against TnpPred
+
+If CasFinder added
+CasFinder: Best Cas HMM hit
 
 #### HEADERS parsed_tables ####
 # prokka:
@@ -455,18 +544,7 @@ Kingdom
 Description
 
 # merops:
-CDS
-MEROPS ID
-Percent identical
-Alignment length
-Number of mismatches
-Number of gaps
-Start of query
-End of query
-Start of alignment in subject
-End of alignment in subject
-E-value
-Bitscore
+diamond blast8 output
 
 # signalp:
 CDS
@@ -503,6 +581,12 @@ CARD_Protein_Sequence
 Percentage Length of Reference Sequence ID
 Model_ID
 
+# tnppred
+hmmscan tblout output
+
+# casfinder
+hmmscan tblout output
+
 #### Versions ####
 KOfamScan 1.0.0
 KEGG release 90.0
@@ -516,6 +600,8 @@ Database from Mar 19th 2019
 MEROPS release 12.0
 
 SignalP 5.0
+
+CasFinder 2.0.2 HMMs
 
 Remaining version can be found in the environment.yml
 

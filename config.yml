@@ -26,3 +26,7 @@ antismash: /mibi/users/russel/Software/miniconda3/envs/antismash/bin/antismash -
 
 # RGI (CARD)
 rgi: rgi main -n 10 -i ANNOTATION_FAS -o ANNOTATION_OUT -t protein --clean -a DIAMOND
+
+# TnpPred
+tnppred: hmmscan --tblout ANNOTATION_OUT -o ANNOTATION_TMP /mibi/Databases/Russel/TnpPred/TnpPred_HMM_Fix.hmm ANNOTATION_FAS
+
