@@ -321,7 +321,7 @@ then
 		Rscript ${DIR}/parse_cazy.R ${OUT}/dbcan2/overview.txt ${OUT}/parsed_tables/dbcan2.tabx
         	sort -k1,1 ${OUT}/parsed_tables/dbcan2.tabx | awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/dbcan2.tab
 		rm ${OUT}/parsed_tables/dbcan2.tabx
-        	awk '$7 > 1' ${OUT}/parsed_tables/dbcan2.tab | awk 'BEGIN {OFS="\t"}{print $1,$6}' > ${OUT}/da1
+        	awk 'BEGIN {OFS="\t"}{print $1,$5}' ${OUT}/parsed_tables/dbcan2.tab > ${OUT}/da1
         	awk -F'\t' 'BEGIN {OFS="\t"}{print $9,$2}' ${OUT}/dbcan2/cgc.out \
                 	| awk 'NF>0' \
                 	| awk '$2 != "null"' \
