@@ -353,5 +353,4 @@ dependencies:
   - zlib=1.2.11=h14c3975_1004
   - pip:
     - natsort==6.0.0
-prefix: /usr/local/home/russel/mibi/Software/miniconda3/envs/annotation
 
