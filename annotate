@@ -13,7 +13,7 @@ Usage:
  ./annotate [-i my.fasta] [-o /my/output/dir]
 
 Optional arguments:
-[-c /path/to/alternative/config/file] Change the config.yml file to change specific options in the different tools (default: /mibi/users/russel/Software/annotation/config.yml)
+[-c /path/to/alternative/config/file] Change the config.yml file to change specific options in the different tools (default: /same/dir/as/annotate/script/config.yml)
 [-r] resume (e.g. to add new annotation tools or create new output table with different e-value cutoffs)
 
 Arguments to add tools:
