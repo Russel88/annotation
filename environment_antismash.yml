@@ -142,5 +142,4 @@ dependencies:
   - zlib=1.2.11=h14c3975_1004
   - pip:
     - antismash==4.1.0
-prefix: /usr/local/home/russel/mibi/Software/miniconda3/envs/antismash
 
