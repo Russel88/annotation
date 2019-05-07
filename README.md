@@ -18,7 +18,9 @@ See instructions here: ftp://ftp.genome.jp/pub/tools/kofamscan/
 See instructions here: https://github.com/eggnogdb/eggnog-mapper
 
 ### Install dbCAN2 and download associated CAZyme databases
-See instructions here: https://github.com/linnabrown/run_dbcan
+`git clone https://github.com/Russel88/run_dbcan.git`
+
+Download databases as described here https://github.com/linnabrown/run_dbcan
 
 ### Install SignalP
 See instructions here: http://www.cbs.dtu.dk/services/SignalP/
