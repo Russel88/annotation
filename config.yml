@@ -30,3 +30,5 @@ rgi: rgi main -n 10 -i ANNOTATION_FAS -o ANNOTATION_OUT -t protein --clean -a DI
 # TnpPred
 tnppred: hmmscan --tblout ANNOTATION_OUT -o ANNOTATION_TMP /mibi/Databases/Russel/TnpPred/TnpPred_HMM_Fix.hmm ANNOTATION_FAS
 
+# Cas
+cas: parallel -j10 doit {} ::: /mibi/users/russel/Databases/casprofiles_2.0.2/*.hmm

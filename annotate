@@ -265,7 +265,8 @@ then
                 hmmscan --tblout ${CASOUT}/${name}.tab -o ${CASOUT}/${name}.out $1 $CASFAS
 		}
 		export -f doit
-		parallel -j10 doit {} ::: /mibi/users/russel/Databases/casprofiles_2.0.2/*.hmm
+		THIS=$(grep "cas: " $CONFIG | awk '{$1=""; print $0}')
+                $THIS
         fi
 fi
 
