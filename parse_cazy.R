@@ -32,5 +32,5 @@ if(nrow(no.cons) > 0){
     final <- df.sub
 }
 
-write.table(final[, -6], file = commandArgs(TRUE)[2], row.names = FALSE, col.names = FALSE, quote = FALSE)
+write.table(final[, -c(5,7)], file = commandArgs(TRUE)[2], row.names = FALSE, col.names = FALSE, quote = FALSE)
 

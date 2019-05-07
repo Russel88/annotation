@@ -277,15 +277,21 @@ mkdir -p ${OUT}/parsed_tables
 grep "ID=" ${OUT}/prokka/*.gff \
 	| awk -F'\t' '{print $9}' \
 	| awk -F";" 'BEGIN {OFS="\t"}{for(i=1;i<=NF;i++){if ($i ~ /product=/){print $1,$i}}}' \
-	| sed 's/ID=//;s/product=//' > ${OUT}/parsed_tables/prokka.tab
+	| sed 's/ID=//;s/product=//' \
+	| paste - <(grep "ID=" ${OUT}/prokka/*.gff \
+		| awk 'BEGIN{OFS="_"}{print $1,$4,$5}' \
+		| sed 's/.*|X_//') |
+	awk -F'\t' 'BEGIN{OFS="\t"}{print $1,$3,$2}'> ${OUT}/parsed_tables/prokka.tab
+
 cp ${OUT}/parsed_tables/prokka.tab ${OUT}/temp.tab
-HEADER="#CDS\tAnnotation_prokka"
+HEADER="#CDS\tContig_Position\tAnnotation_prokka"
+cat <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/parsed_tables/prokka.tab
 
 # KOfam
 if ! [ -z "$KOFAM" ]
 then
-	sed 's/^*/ /' ${OUT}/kofam/results \
-        	| tail -n +3 \
+	tail -n +3 ${OUT}/kofam/results \
+        	| sed 's/^*/ /' \
 		| awk 'BEGIN {OFS="\t"}1' \
 		| sort -k1,1 -u > ${OUT}/parsed_tables/kofam.tab
 
@@ -302,6 +308,8 @@ then
 	mv ${OUT}/temp1.tab ${OUT}/temp.tab
 	rm ${OUT}/ka
 	HEADER=${HEADER}"\tKO_KOfam\tAnnotation_KOfam"
+	cat <(printf "#CDS\tKO\tMatch_length\tSimilarity\tE-value\tAnnotation\n") ${OUT}/parsed_tables/kofam.tab > ${OUT}/parsed_tables/kofam.tab1
+	mv ${OUT}/parsed_tables/kofam.tab1 ${OUT}/parsed_tables/kofam.tab
 fi
 
 # dbCAN2
@@ -326,6 +334,8 @@ then
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp1.tab ${OUT}/da2 > ${OUT}/temp.tab
         rm ${OUT}/da1 ${OUT}/da2 ${OUT}/temp1.tab
 	HEADER=${HEADER}"\tCAZy\tCGC"
+	cat <(printf "#CDS\tHMMER_annotation\tHotPep_annotation\tDiamond_annotation\tConsensus_annotation\n") ${OUT}/parsed_tables/dbcan2.tab > ${OUT}/parsed_tables/dbcan2.tab1
+	mv ${OUT}/parsed_tables/dbcan2.tab1 ${OUT}/parsed_tables/dbcan2.tab
 fi
 
 # eggNOG
@@ -343,6 +353,8 @@ then
         rm ${OUT}/ea
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
         HEADER=${HEADER}"\tKO_eggNOG\tTax_eggNOG\tAnnotation_eggNOG"
+	cat <(sed -n '4p' ${OUT}/eggnog/annotation.emapper.annotations | sed 's/query_name/CDS/') $OUT/parsed_tables/eggnog.tab > $OUT/parsed_tables/eggnog.tab1
+	mv $OUT/parsed_tables/eggnog.tab1 $OUT/parsed_tables/eggnog.tab
 fi
 
 # Merops
@@ -360,6 +372,8 @@ then
         rm ${OUT}/ma
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
         HEADER=${HEADER}"\tMEROPS"
+	cat <(printf "#CDS\tMEROPS\tPct_id\tAlign_length\tMismatches\tGaps\tQuery_start\tQuery_end\tSubject_start\tSubject_end\tE-value\tBit_score\n") ${OUT}/parsed_tables/merops.tab > ${OUT}/parsed_tables/merops.tab1
+	mv ${OUT}/parsed_tables/merops.tab1 ${OUT}/parsed_tables/merops.tab
 fi
 
 # SignalP
@@ -372,12 +386,14 @@ then
         rm ${OUT}/sa
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
         HEADER=${HEADER}"\tSignalP"
+	cat <(printf "#CDS\tAnnotation\tSP_probability\tTAT_probability\tLIPO_probability\tOTHER_probability\tCleavage_site\n") ${OUT}/parsed_tables/signalp.tab > ${OUT}/parsed_tables/signalp.tab1
+	mv ${OUT}/parsed_tables/signalp.tab1 ${OUT}/parsed_tables/signalp.tab
 fi
 
 # antiSMASH
 if "$ANTISMASH"
 then
-	if ! [ -z ${OUT}/antismash/geneclusters.txt ]
+	if ! [ -s ${OUT}/antismash/geneclusters.txt ]
 	then
 		printf "X_00001\tNA\n" > ${OUT}/aa
 	else
@@ -395,6 +411,8 @@ then
         rm ${OUT}/aa
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
         HEADER=${HEADER}"\tantiSMASH"
+	cat <(printf "#CDS\tAnnotation\tCluster_ID\n") ${OUT}/parsed_tables/antismash.tab > ${OUT}/parsed_tables/antismash.tab1 
+	mv ${OUT}/parsed_tables/antismash.tab1 ${OUT}/parsed_tables/antismash.tab
 fi
 
 # RGI
@@ -411,6 +429,8 @@ then
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/parsed_tables/rgi.tab > ${OUT}/temp1.tab
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
         HEADER=${HEADER}"\tRGI"
+	cat <(printf "#CDS\tAnnotation\n") ${OUT}/parsed_tables/rgi.tab > ${OUT}/parsed_tables/rgi.tab1
+	mv ${OUT}/parsed_tables/rgi.tab1 ${OUT}/parsed_tables/rgi.tab
 fi
 
 # TnpPred
@@ -419,9 +439,9 @@ then
 	grep -v "^#" ${OUT}/tnppred/output.tab \
 		| sort -k3,3 -k5,5g \
 		| sort -k3,3 -u \
-		| awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/tnppred.tab
-        awk 'BEGIN {OFS="\t"}{print $3,$1,$5}' ${OUT}/parsed_tables/tnppred.tab\
-		| awk -v k="${TNPPRED}" 'BEGIN {OFS="\t"} $3<k {print $1,$2}' | sort -k1,1 > ${OUT}/ta
+		| awk 'BEGIN {OFS="\t"}{print $3,$1,$5}' > ${OUT}/parsed_tables/tnppred.tab
+	awk -v k="${TNPPRED}" 'BEGIN {OFS="\t"} $3<k {print $1,$2}' ${OUT}/parsed_tables/tnppred.tab \
+		| sort -k1,1 > ${OUT}/ta
 	if ! [ -s "${OUT}/ta" ]
         then
                 printf "X_00001\tNA\n" > ${OUT}/ta
@@ -430,6 +450,8 @@ then
         rm ${OUT}/ta
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
         HEADER=${HEADER}"\tTnpPred"
+	cat <(printf "#CDS\tTnpPredHMM\tE-value\n") ${OUT}/parsed_tables/tnppred.tab > ${OUT}/parsed_tables/tnppred.tab1
+	mv ${OUT}/parsed_tables/tnppred.tab1 ${OUT}/parsed_tables/tnppred.tab
 fi
 
 # CasFinder
@@ -438,20 +460,21 @@ then
         grep -v "^#" ${OUT}/casfinder/*.tab \
                 | sort -k3,3 -k5,5g \
                 | sort -k3,3 -u \
-                | awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/casfinder.tab
-        awk 'BEGIN {OFS="\t"}{print $3,$1,$5}' ${OUT}/parsed_tables/casfinder.tab\
-                | awk -v k="${CAS}" '$3<k {print $1,$2}' \
-		| sort -k1,1 \
-		| awk '{gsub(".tab.*","",$2)}1' \
-		| awk 'BEGIN {OFS="\t"}{gsub(".*/","",$2)}1'  > ${OUT}/xa
+                | awk '{gsub(".tab.*","",$1)}1' \
+		| awk '{gsub(".*/","",$1)}1' \
+		| awk 'BEGIN {OFS="\t"}{print $3,$1,$5}'> ${OUT}/parsed_tables/casfinder.tab
+        awk -v k="${CAS}" 'BEGIN {OFS="\t"} $3<k {print $1,$2}' ${OUT}/parsed_tables/casfinder.tab \
+		| sort -k1,1 > ${OUT}/xa
         if ! [ -s "${OUT}/xa" ]
         then
                 printf "X_00001\tNA\n" > ${OUT}/xa
         fi
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/xa > ${OUT}/temp1.tab
-        rm ${OUT}/xa
+	rm ${OUT}/xa
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
         HEADER=${HEADER}"\tCasFinder"
+	cat <(printf "#CDS\tCasHMM\tE-value\n") ${OUT}/parsed_tables/casfinder.tab > ${OUT}/parsed_tables/casfinder.tab1
+	mv ${OUT}/parsed_tables/casfinder.tab1 ${OUT}/parsed_tables/casfinder.tab
 fi
 
 
@@ -465,6 +488,7 @@ printf "#### Version 0.0.1 ####
 
 #### HEADERS overview.tab ####
 CDS: Gene name given by prokka
+Contig_Position: Contig and position on contig of CDS
 Annotation_prokka: Annotation by prokka
 
 If KOfam added:
@@ -497,95 +521,6 @@ TnpPred: Prediction from hmmscan against TnpPred
 
 If CasFinder added
 CasFinder: Best Cas HMM hit
-
-#### HEADERS parsed_tables ####
-# prokka:
-CDS
-Annotation
-
-# kofam:
-CDS
-KEGG Ortholog
-Match length
-Similarity
-E-value
-Annotation
-
-# dbcan2:
-CDS
-HMMER annotation
-HotPep annotation
-Diamond annotation
-Consensus annotation
-Consensus size (# Tools)
-
-# eggnog:
-CDS
-seed_eggNOG_ortholog
-seed_ortholog_evalue
-seed_ortholog_score
-best_tax_level
-Preferred_name
-GOs
-EC
-KEGG_ko
-KEGG_Pathway
-KEGG_Module
-KEGG_Reaction
-KEGG_rclass
-BRITE
-KEGG_TC
-CAZy
-BiGG_Reaction
-Kingdom
-?
-?
-?
-Description
-
-# merops:
-diamond blast8 output
-
-# signalp:
-CDS
-Annotation
-SP probability
-TAT probability
-LIPO probability
-OTHER probability
-Cleavage site (CS)
-
-# antismash:
-CDS
-antiSMASH annotation
-Cluster ID
-
-# rgi
-CDS
-Contig
-Start
-Stop
-Orientation
-Cut_Off Pass_Bitscore
-Best_Hit_Bitscore
-Best_Hit_ARO
-Best_IdentitiesARO
-Model_type
-SNPs_in_Best_Hit_ARO
-Other_SNPs
-Drug Class
-Resistance Mechanism
-AMR Gene Family Predicted_DN
-Predicted_Protein
-CARD_Protein_Sequence
-Percentage Length of Reference Sequence ID
-Model_ID
-
-# tnppred
-hmmscan tblout output
-
-# casfinder
-hmmscan tblout output
 
 #### Versions ####
 KOfamScan 1.0.0
