@@ -5,9 +5,9 @@
 # Usage message
 usage() { printf "
 ..... Annotation pipeline .....
-........ Version 0.0.2 ........
+........ Version 0.0.3 ........
 ......... Jakob Russel ........
-........... 2019 May ..........
+.........  2019 August ........
 
 Usage:
  ./annotate [-i my.fasta] [-o /my/output/dir]
@@ -25,7 +25,6 @@ Arguments to add tools:
 [-k <e-value>] Adds KOfam_scan for KEGG orthologs and annotations. Choose e-value cutoff
 [-s <string>] Adds SignalP prediction. Choose organism: arch, gram+, or gram-
 [-t <e-value>] Adds Transposase prediction (TnpPred). Choose e-value cutoff
-[-x <e-value>] Adds CasFinder for CRISPR-associated gene prediction. Choose e-value cutoff
 
 Example:
  ./annotate -i my.fasta -o /my/output/dir -d -e 1e-10 -n -m 1e-20 -a -r -k 1e-10 -s gram+
@@ -43,7 +42,7 @@ DBCAN=false
 ANTISMASH=false
 RGI=false
 
-while getopts ":o:i:c:k:m:s:e:t:x:rdan" opt
+while getopts ":o:i:c:k:m:s:e:t:rdan" opt
 do
   case $opt in
     o) OUT="$OPTARG";;
@@ -58,7 +57,6 @@ do
     a) ANTISMASH=true;;
     n) RGI=true;;
     t) TNPPRED="$OPTARG";;
-    x) CAS="$OPTARG";;
     :) echo "Missing option argument for -$OPTARG"; usage;;
     *) usage;;
   esac
@@ -206,10 +204,6 @@ then
         else
                 mkdir ${OUT}/antismash
                 echo "${GREEN}Running antiSMASH${NORM}"
-		NEWPATH=$(grep "antismash_conda: " $CONFIG | awk '{$1=""; print $0}' | sed 's/ //')
-		echo "export PATH="$NEWPATH":$PATH" > $OUT/newpath.sh
-		source ${OUT}/newpath.sh
-		rm ${OUT}/newpath.sh
                 THIS=$(grep "antismash: " $CONFIG \
                         | awk '{$1=""; print $0}' \
                         | sed "s@ANNOTATION_OUT@${OUT}/antismash@;s@ANNOTATION_GBK@${OUT}/prokka/*\.gbk@")
@@ -246,27 +240,6 @@ then
                         | awk '{$1=""; print $0}' \
                         | sed "s@ANNOTATION_OUT@${OUT}/tnppred/output.tab@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_TMP@${OUT}/tnppred/hmmscan.txt@")
 		$THIS
-        fi
-fi
-
-# Run against CasFinder HMMs
-if ! [ -z "$CAS" ]
-then
-        if [ -d "$OUT/casfinder" ]
-        then
-                echo "${GREEN}CasFinder HMMs has already been searched. Skipping${NORM}"
-        else
-                mkdir -p ${OUT}/casfinder
-                echo "${GREEN}Running against CasFinder HMMs${NORM}"
-		export CASFAS=$(echo ${OUT}/prokka/*.faa)
-		export CASOUT=$(echo ${OUT}/casfinder)
-		doit() {
-		name=$(echo $1 | sed "s|.*\/||;s|\.hmm||")
-                hmmscan --tblout ${CASOUT}/${name}.tab -o ${CASOUT}/${name}.out $1 $CASFAS
-		}
-		export -f doit
-		THIS=$(grep "cas: " $CONFIG | awk '{$1=""; print $0}')
-                $THIS
         fi
 fi
 
@@ -455,37 +428,13 @@ then
 	mv ${OUT}/parsed_tables/tnppred.tab1 ${OUT}/parsed_tables/tnppred.tab
 fi
 
-# CasFinder
-if ! [ -z "$CAS" ]
-then
-        grep -v "^#" ${OUT}/casfinder/*.tab \
-                | sort -k3,3 -k5,5g \
-                | sort -k3,3 -u \
-                | awk '{gsub(".tab.*","",$1)}1' \
-		| awk '{gsub(".*/","",$1)}1' \
-		| awk 'BEGIN {OFS="\t"}{print $3,$1,$5}'> ${OUT}/parsed_tables/casfinder.tab
-        awk -v k="${CAS}" 'BEGIN {OFS="\t"} $3<k {print $1,$2}' ${OUT}/parsed_tables/casfinder.tab \
-		| sort -k1,1 > ${OUT}/xa
-        if ! [ -s "${OUT}/xa" ]
-        then
-                printf "X_00001\tNA\n" > ${OUT}/xa
-        fi
-        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/xa > ${OUT}/temp1.tab
-	rm ${OUT}/xa
-        mv ${OUT}/temp1.tab ${OUT}/temp.tab
-        HEADER=${HEADER}"\tCasFinder"
-	cat <(printf "#CDS\tCasHMM\tE-value\n") ${OUT}/parsed_tables/casfinder.tab > ${OUT}/parsed_tables/casfinder.tab1
-	mv ${OUT}/parsed_tables/casfinder.tab1 ${OUT}/parsed_tables/casfinder.tab
-fi
-
-
 
 ### Adding headers
 cat <(printf "#./annotate ") <(echo ${CLI}) <(printf "#") <(date) <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/overview.tab
 rm ${OUT}/temp.tab
 
 # Make README
-printf "#### Version 0.0.1 ####
+printf "#### Version 0.0.3 ####
 
 #### HEADERS overview.tab ####
 CDS: Gene name given by prokka
@@ -520,9 +469,6 @@ RGI: Prediction from RGI(CARD)
 If TnpPred added:
 TnpPred: Prediction from hmmscan against TnpPred
 
-If CasFinder added
-CasFinder: Best Cas HMM hit
-
 #### Versions ####
 KOfamScan 1.0.0
 KEGG release 90.0
@@ -536,8 +482,6 @@ Database from Mar 19th 2019
 MEROPS release 12.0
 
 SignalP 5.0
-
-CasFinder 2.0.2 HMMs
 
 Remaining version can be found in the environment.yml
 

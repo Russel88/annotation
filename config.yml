@@ -15,20 +15,16 @@ dbcan: python /mibi/users/russel/Software/run_dbcan/run_dbcan.py --out_dir ANNOT
 eggnog: python2 /mibi/users/russel/Software/eggnog-mapper/emapper.py --cpu 10 -m diamond --data_dir /mibi/users/russel/Databases/eggnog --dmnd_db /mibi/users/russel/Databases/eggnog/eggnog_proteins.dmnd --output_dir ANNOTATION_OUT --temp_dir ANNOTATION_TMP -i ANNOTATION_FAS -o annotation
 
 # MEROPS
-merops: diamond blastp --more-sensitive -d /mibi/users/russel/Databases/merops/merops -q ANNOTATION_FAS -o ANNOTATION_OUT
+merops: diamond blastp -p 10 --more-sensitive -d /mibi/users/russel/Databases/merops/merops -q ANNOTATION_FAS -o ANNOTATION_OUT
 
 # signalp
 signalp: /mibi/users/russel/Software/signalp-5.0/bin/signalp -fasta ANNOTATION_FAS -org ANNOTATION_ORG -prefix ANNOTATION_OUT -tmp ANNOTATION_TMP
 
 # antiSMASH
-antismash_conda: /mibi/users/russel/Software/miniconda3/envs/antismash/bin/
-antismash: /mibi/users/russel/Software/miniconda3/envs/antismash/bin/antismash -c 10 ANNOTATION_GBK --outputfolder ANNOTATION_OUT
+antismash: antismash -c 10 ANNOTATION_GBK --outputfolder ANNOTATION_OUT
 
 # RGI (CARD)
 rgi: rgi main -n 10 -i ANNOTATION_FAS -o ANNOTATION_OUT -t protein --clean -a DIAMOND
 
 # TnpPred
-tnppred: hmmscan --tblout ANNOTATION_OUT -o ANNOTATION_TMP /mibi/Databases/Russel/TnpPred/TnpPred_HMM_Fix.hmm ANNOTATION_FAS
-
-# Cas
-cas: parallel -j10 doit {} ::: /mibi/users/russel/Databases/casprofiles_2.0.2/*.hmm
+tnppred: hmmscan --tblout ANNOTATION_OUT -o ANNOTATION_TMP /mibi/Databases/TnpPred/2019_05_06/hmmer321/TnpPred_HMM_Fix.hmm ANNOTATION_FAS

@@ -4,10 +4,8 @@
 
 miniconda or anaconda is needed
 
-### Make conda envs
+### Make conda env
 `conda env create --name annotation -f=environment.yml`
-
-`conda env create --name antismash -f=environment_antismash.yml`
 
 ### Install KOfam_scan and download database
 See instructions here: ftp://ftp.genome.jp/pub/tools/kofamscan/
@@ -40,22 +38,15 @@ Get HMMs:
 
 `hmmpress TnpPred_HMM_Profiles.hmm`
 
-### CasFinder
-Download HMMs from:
-https://crisprcas.i2bc.paris-saclay.fr/Home/DownloadFile?filename=CRISPRCasFinder.zip
-
-`hmmpress CRISPRCasFinder/CasFinder-2.0.2/CASprofiles-2.0.2/*.hmm`
-
-### GNU parallel
-Install GNU parallel if not already installed
-
-`conda activate annotation`
-
-`conda install -c conda-forge parallel` 
+### RGI
+Download database: https://github.com/arpcard/rgi
 
 ## How to run
 
 **Edit the config.yml file to point to the software and databases**
+
+### Fix a prokka problem
+`export PERL5LIB=$HOME/Software/miniconda2/envs/annotate/lib/perl5/site_perl/5.22.0`
 
 `conda activate annotation`
 
