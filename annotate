@@ -5,7 +5,7 @@
 # Usage message
 usage() { printf "
 ..... Annotation pipeline .....
-........ Version 0.0.3 ........
+........ Version 0.0.4 ........
 ......... Jakob Russel ........
 .........  2019 August ........
 
@@ -14,7 +14,7 @@ Usage:
 
 Optional arguments:
 [-c /path/to/alternative/config/file] Change the config.yml file to change specific options in the different tools (default: /same/dir/as/annotate/script/config.yml)
-[-r] resume (e.g. to add new annotation tools or create new output table with different e-value cutoffs)
+[-x prokka,kofam,dbcan,eggnog,merops,rgi,tnppred] Comma-delimted list (no spaces) of tools for defining the hierarchy of the consensus annotation
 
 Arguments to add tools:
 [-d] Adds dbcan2 for CAZyme and CAZyme Gene Cluster (CGC) prediction
@@ -27,7 +27,7 @@ Arguments to add tools:
 [-t <e-value>] Adds Transposase prediction (TnpPred). Choose e-value cutoff
 
 Example:
- ./annotate -i my.fasta -o /my/output/dir -d -e 1e-10 -n -m 1e-20 -a -r -k 1e-10 -s gram+
+ ./annotate -i my.fasta -o /my/output/dir -d -e 1e-10 -n -m 1e-20 -a -k 1e-10 -s gram+
 
 " 1>&2; exit 1; }
 GREEN=$(tput setaf 2)
@@ -37,18 +37,17 @@ CLI=$*
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 # Get arguments
-RESUME=false
 DBCAN=false
 ANTISMASH=false
 RGI=false
+HCHY='prokka,kofam,dbcan,eggnog,merops,rgi,tnppred'
 
-while getopts ":o:i:c:k:m:s:e:t:rdan" opt
+while getopts ":o:i:c:k:m:s:e:t:x:dan" opt
 do
   case $opt in
     o) OUT="$OPTARG";;
     i) FAS="$OPTARG";;
     c) CONFIG="$OPTARG";;
-    r) RESUME=true;;
     k) KOFAM="$OPTARG";;
     d) DBCAN=true;;
     e) EGGNOG="$OPTARG";;
@@ -57,6 +56,7 @@ do
     a) ANTISMASH=true;;
     n) RGI=true;;
     t) TNPPRED="$OPTARG";;
+    x) HCHY="$OPTARG";;
     :) echo "Missing option argument for -$OPTARG"; usage;;
     *) usage;;
   esac
@@ -80,11 +80,12 @@ then
 	OUT=${PWD}/${OUT}
 fi
 
+echo "${GREEN}Running Annotation pipeline version 0.0.4...${NORM}"
+
 # Check output dir
-if [ -d "$OUT" ] && ! "$RESUME"
+if [ -d "$OUT" ]
 then
-    	printf "Output directory already exists! Terminating\nUse [-r] argument to add tools to existing dir and/or remake output with new e-value cutoffs\n"
-	exit 1
+    	printf "Output directory already exists! Adding tools not previously run and remaking overview table with new e-values cutoffs\n"
 else
 	mkdir -p $OUT
 fi
@@ -99,7 +100,7 @@ else
 	THIS=$(grep "prokka: " $CONFIG \
         	| awk '{$1=""; print $0}' \
         	| sed "s@ANNOTATION_OUT@${OUT}/prokka@;s@ANNOTATION_FAS@${FAS}@")
-	$THIS
+	$THIS &> ${OUT}/log.txt
 fi
 
 if ! [ -f "${OUT}/prokka/"*.faa ]
@@ -119,7 +120,7 @@ then
 		THIS=$(grep "kofam: " $CONFIG \
 	        	| awk '{$1=""; print $0}' \
 	        	| sed "s@ANNOTATION_OUT@${OUT}/results@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_TMP@${OUT}/tmp@")
-		$THIS
+		$THIS &>> ${OUT}/log.txt
 		mkdir ${OUT}/kofam
 		mv ${OUT}/results ${OUT}/kofam/results
 		mv ${OUT}/tmp/tabular/ ${OUT}/kofam
@@ -139,7 +140,7 @@ then
                 THIS=$(grep "dbcan: " $CONFIG \
                         | awk '{$1=""; print $0}' \
                         | sed "s@ANNOTATION_OUT@${OUT}/dbcan2@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_GFF@${OUT}/prokka/trimmed.gff2@")
-                $THIS
+                $THIS &>> ${OUT}/log.txt
         fi
 fi
 
@@ -155,7 +156,7 @@ then
                 THIS=$(grep "eggnog: " $CONFIG \
                         | awk '{$1=""; print $0}' \
                         | sed "s@ANNOTATION_OUT@${OUT}/eggnog@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_TMP@${OUT}/tmp@")
-                $THIS
+                $THIS &>> ${OUT}/log.txt
         fi
 fi
 
@@ -171,7 +172,7 @@ then
                 THIS=$(grep "merops: " $CONFIG \
                         | awk '{$1=""; print $0}' \
                         | sed "s@ANNOTATION_OUT@${OUT}/merops/matches.m8@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@")
-                $THIS
+                $THIS &>> ${OUT}/log.txt
         fi
 fi
 
@@ -191,7 +192,7 @@ then
                 THIS=$(grep "signalp: " $CONFIG \
                         | awk '{$1=""; print $0}' \
                         | sed "s@ANNOTATION_OUT@${OUT}/signalp/output@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_ORG@${SIGNALP}@;s@ANNOTATION_TMP@${OUT}/tmp@")
-                $THIS
+                $THIS &>> ${OUT}/log.txt
         fi
 fi
 
@@ -207,7 +208,7 @@ then
                 THIS=$(grep "antismash: " $CONFIG \
                         | awk '{$1=""; print $0}' \
                         | sed "s@ANNOTATION_OUT@${OUT}/antismash@;s@ANNOTATION_GBK@${OUT}/prokka/*\.gbk@")
-                $THIS
+                $THIS &>> ${OUT}/log.txt
         fi
 fi
 
@@ -223,7 +224,7 @@ then
                 THIS=$(grep "rgi: " $CONFIG \
                         | awk '{$1=""; print $0}' \
                         | sed "s@ANNOTATION_OUT@${OUT}/rgi/card@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@")
-                $THIS
+                $THIS &>> ${OUT}/log.txt
         fi
 fi
 
@@ -239,7 +240,7 @@ then
                 THIS=$(grep "tnppred: " $CONFIG \
                         | awk '{$1=""; print $0}' \
                         | sed "s@ANNOTATION_OUT@${OUT}/tnppred/output.tab@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_TMP@${OUT}/tnppred/hmmscan.txt@")
-		$THIS
+		$THIS &>> ${OUT}/log.txt
         fi
 fi
 
@@ -433,8 +434,25 @@ fi
 cat <(printf "#./annotate ") <(echo ${CLI}) <(printf "#") <(date) <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/overview.tab
 rm ${OUT}/temp.tab
 
+### Making Consensus table
+${DIR}/consensus_annotation.py ${OUT}/overview.tab ${OUT}/consensus.tab ${HCHY}
+
 # Make README
-printf "#### Version 0.0.3 ####
+printf "#### Version 0.0.4 ####
+
+#### HEADERS consensus.tab ####
+CDS: Gene name given by prokka
+Contig_Position: Contig and position on contig of CDS
+Annotation: Consensus annotation as defined by 
+
+If dbCAN2 added:
+CGC: Annotation by CAZyme-Gene-Cluster (CGC) predictor. TP=TransPorter, TC=TransCription factor, STP=Signal Transduction Protein, CAZyme=CAZymes part of CGC
+
+If antiSMASH added:
+antiSMASH: Pred_X, where Pred is cluster prediction and X is a unique number for each cluster
+
+If SignalP added:
+SignalP: SignalP prediction
 
 #### HEADERS overview.tab ####
 CDS: Gene name given by prokka
