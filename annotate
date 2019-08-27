@@ -14,7 +14,7 @@ Usage:
 
 Optional arguments:
 [-c /path/to/alternative/config/file] Change the config.yml file to change specific options in the different tools (default: /same/dir/as/annotate/script/config.yml)
-[-x prokka,kofam,dbcan,eggnog,merops,rgi,tnppred] Comma-delimted list (no spaces) of tools for defining the hierarchy of the consensus annotation
+[-x prokka,kofamName,kofamKO,dbcan,eggnogName,eggnogKO,merops,rgi,tnppred] Comma-delimted list (no spaces) of tools for defining the hierarchy of the consensus annotation
 
 Arguments to add tools:
 [-d] Adds dbcan2 for CAZyme and CAZyme Gene Cluster (CGC) prediction
@@ -27,7 +27,7 @@ Arguments to add tools:
 [-t <e-value>] Adds Transposase prediction (TnpPred). Choose e-value cutoff
 
 Example:
- ./annotate -i my.fasta -o /my/output/dir -d -e 1e-10 -n -m 1e-20 -a -k 1e-10 -s gram+
+ ./annotate -i my.fasta -o /my/output/dir -d -n -m 1e-10 -a -k 1e-10 -s gram+
 
 " 1>&2; exit 1; }
 GREEN=$(tput setaf 2)
@@ -40,7 +40,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 DBCAN=false
 ANTISMASH=false
 RGI=false
-HCHY='prokka,kofam,dbcan,eggnog,merops,rgi,tnppred'
+HCHY='prokka,kofamName,kofamKO,dbcan,eggnogName,eggnogKO,merops,rgi,tnppred'
 
 while getopts ":o:i:c:k:m:s:e:t:x:dan" opt
 do

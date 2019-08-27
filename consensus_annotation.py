@@ -12,16 +12,22 @@ tools = list(sys.argv[3].split(","))
 def prokka(dd):
     return [dd[dd['Annotation_prokka'] != "hypothetical protein"][['#CDS','Contig_Position','Annotation_prokka']],
             dd[dd['Annotation_prokka'] == "hypothetical protein"]]
-def kofam(dd):
+def kofamName(dd):
     dd1 = dd[dd['Annotation_KOfam'].notna()]
     return [dd1[~dd1['Annotation_KOfam'].str.contains("uncharacterized")][['#CDS','Contig_Position','Annotation_KOfam']],
            dd[dd['Annotation_KOfam'].isna() | dd['Annotation_KOfam'].str.contains("uncharacterized")]]
+def kofamKO(dd):
+    return [dd[dd['KO_KOfam'].notna()][['#CDS','Contig_Position','KO_KOfam']],
+            dd[dd['KO_KOfam'].isna()]]
 def dbcan(dd):
     return [dd[dd['CAZy'].notna()][['#CDS','Contig_Position','CAZy']],
            dd[dd['CAZy'].isna()]]
-def eggnog(dd):
+def eggnogName(dd):
     return [dd[dd['Annotation_eggNOG'].notna()][['#CDS','Contig_Position','Annotation_eggNOG']],
             dd[dd['Annotation_eggNOG'].isna()]]
+def eggnogKO(dd):
+    return [dd[dd['KO_eggNOG'].notna()][['#CDS','Contig_Position','KO_eggNOG']],
+            dd[dd['KO_eggNOG'].isna()]]
 def merops(dd):
     return [dd[dd['MEROPS'].notna()][['#CDS','Contig_Position','MEROPS']],
            dd[dd['MEROPS'].isna()]]
@@ -36,9 +42,11 @@ def tnppred(dd):
 def consensus(tool, ddd):
     switcher = {
         'prokka': lambda: prokka(ddd),
-        'kofam': lambda: kofam(ddd),
+        'kofamName': lambda: kofamName(ddd),
+        'kofamKO': lambda: kofamKO(ddd),
         'dbcan': lambda: dbcan(ddd),
-        'eggnog': lambda: eggnog(ddd),
+        'eggnogName': lambda: eggnogName(ddd),
+	'eggnogKO': lambda: eggnogKO(ddd),
         'merops': lambda: merops(ddd),
         'rgi': lambda: rgi(ddd),
         'tnppred': lambda: tnppred(ddd)
@@ -53,14 +61,20 @@ for i in tools:
     if i == 'prokka':
         if 'Annotation_prokka' in cols:
             tools_included.append(i)
-    if i == 'kofam':
+    if i == 'kofamName':
         if 'Annotation_KOfam' in cols:
+            tools_included.append(i)
+    if i == 'kofamKO':
+        if 'KO_KOfam' in cols:
             tools_included.append(i)
     if i == 'dbcan':
         if 'CAZy' in cols:
             tools_included.append(i)
-    if i == 'eggnog':
+    if i == 'eggnogName':
         if 'Annotation_eggNOG' in cols:
+            tools_included.append(i)
+    if i == 'eggnogKO':
+        if 'KO_eggNOG' in cols:
             tools_included.append(i)     
     if i == 'merops':
         if 'MEROPS' in cols:
@@ -90,6 +104,7 @@ print str(len(df)) + " out of " + str(len(dat)) + " ORFs/RNAs annotated"
 # Add unknowns
 df_uk = dat[dat['#CDS'].isin(set(df['#CDS']).symmetric_difference(set(dat['#CDS'])))][['#CDS','Contig_Position','Annotation_prokka']]
 df_uk.columns = ['#CDS', 'Contig_Position', 'Annotation']
+df_uk['Annotation'] = "NA"
 
 df = df.append(df_uk).sort_values('#CDS')
 
