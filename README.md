@@ -1,11 +1,19 @@
 # Prokaryotic Genome Annotation pipeline
 
-## Install
+## Citation
+[![DOI](https://zenodo.org/badge/184105796.svg)](https://zenodo.org/badge/latestdoi/184105796)
+
+## Installation
 
 miniconda or anaconda is needed
 
-### Make conda env
-`conda env create --name annotation -f=environment.yml`
+### Clone
+`git clone https://github.com/Russel88/annotation.git`
+
+`cd annotation`
+
+### Make conda environment
+`conda env create -n annotation -f=environment.yml`
 
 ### Install KOfam_scan and download database
 See instructions here: ftp://ftp.genome.jp/pub/tools/kofamscan/
@@ -45,11 +53,11 @@ Download database: https://github.com/arpcard/rgi
 
 **Edit the config.yml file to point to the software and databases**
 
-### Fix a prokka problem
-`export PERL5LIB=$HOME/Software/miniconda2/envs/annotate/lib/perl5/site_perl/5.22.0`
-
 `conda activate annotation`
 
 `./annotate -h`
 
+## Known bugs:
+### Fix a prokka problem
+`export PERL5LIB=$HOME/Software/miniconda2/envs/annotate/lib/perl5/site_perl/5.22.0`
 
