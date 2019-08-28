@@ -1,5 +1,5 @@
 #!/bin/bash
-
+{
 # Master script for running annotation pipeline
 
 # Usage message
@@ -87,6 +87,13 @@ then
 fi
 
 echo "${GREEN}Running Annotation pipeline version 0.0.5...${NORM}"
+
+# Check input file
+if [ ! -f "${FAS}" ]
+then
+	echo "Input file not found"
+	exit 1
+fi
 
 # Check output dir
 if [ -d "$OUT" ]
@@ -541,3 +548,5 @@ Remaining version can be found in the environment.yml
 printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
 echo "${GREEN}Done!${NORM}"
 
+}
+exit $?
