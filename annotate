@@ -20,7 +20,7 @@ Usage:
 
 Optional arguments:
 [-c /path/to/alternative/config/file] Change the config.yml file to change specific options in the different tools (default: /same/dir/as/annotate/script/config.yml)
-[-x dbcan,merops,rgi,prokka,kofamName,kofamKO,eggnogName,eggnogKO,tnppred] Comma-delimted list (no spaces) of tools for defining the hierarchy of the consensus annotation
+[-x prokka,dbcan,merops,rgi,kofamName,kofamKO,eggnogName,eggnogKO,tnppred] Comma-delimted list (no spaces) of tools for defining the hierarchy of the consensus annotation
 
 Arguments to add tools:
 [-d] Adds dbcan2 for CAZyme and CAZyme Gene Cluster (CGC) prediction
@@ -46,7 +46,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 DBCAN=false
 ANTISMASH=false
 RGI=false
-HCHY='dbcan,merops,rgi,prokka,kofamName,kofamKO,eggnogName,eggnogKO,tnppred'
+HCHY='prokka,dbcan,merops,rgi,kofamName,kofamKO,eggnogName,eggnogKO,tnppred'
 
 while getopts ":o:i:c:k:m:s:e:t:x:dan" opt
 do
