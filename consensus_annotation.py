@@ -99,7 +99,7 @@ for i in tools_included:
 # Combine annotate in one data.frame
 df = pd.DataFrame(np.concatenate(knowns, axis=0), columns=['#CDS','Contig_Position','Annotation'])
 
-print str(len(df)) + " out of " + str(len(dat)) + " ORFs/RNAs annotated"
+print str(len(df)) + " out of " + str(len(dat)) + " CDSs annotated"
 
 # Add unknowns
 df_uk = dat[dat['#CDS'].isin(set(df['#CDS']).symmetric_difference(set(dat['#CDS'])))][['#CDS','Contig_Position','Annotation_prokka']]

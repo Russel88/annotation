@@ -57,7 +57,4 @@ Download database: https://github.com/arpcard/rgi
 
 `./annotate -h`
 
-## Known bugs:
-### Fix a prokka problem
-`export PERL5LIB=$HOME/Software/miniconda2/envs/annotate/lib/perl5/site_perl/5.22.0`
 

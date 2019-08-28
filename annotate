@@ -4,10 +4,16 @@
 
 # Usage message
 usage() { printf "
-..... Annotation pipeline .....
-........ Version 0.0.4 ........
-......... Jakob Russel ........
-.........  2019 August ........
+O       o O       o O       o
+| O   o | | O   o | | O   o |
+| | O | | | | O | | | | O | |
+| o   O | | o   O | | o   O |
+o       O o       O o       O
+
+.... Annotation pipeline ....
+....... Version 0.0.5 .......
+........ Jakob Russel .......
+......... 2019 August .......
 
 Usage:
  ./annotate [-i my.fasta] [-o /my/output/dir]
@@ -80,7 +86,7 @@ then
 	OUT=${PWD}/${OUT}
 fi
 
-echo "${GREEN}Running Annotation pipeline version 0.0.4...${NORM}"
+echo "${GREEN}Running Annotation pipeline version 0.0.5...${NORM}"
 
 # Check output dir
 if [ -d "$OUT" ]
@@ -91,11 +97,16 @@ else
 fi
 
 # Run Prokka
+# Fix prokka problem
+export PERL5LIB="/mibi/users/russel/Software/miniconda2/envs/annotate/lib/perl5/site_perl/5.22.0"
+
 if [ -d "${OUT}/prokka" ]
 then
+	printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
 	echo "${GREEN}prokka has already been run. Skipping${NORM}"
 else
-	mkdir ${OUT}/tmp
+	mkdir -p ${OUT}/tmp
+	printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
 	echo "${GREEN}Running Prokka${NORM}"
 	THIS=$(grep "prokka: " $CONFIG \
         	| awk '{$1=""; print $0}' \
@@ -105,7 +116,7 @@ fi
 
 if ! [ -f "${OUT}/prokka/"*.faa ]
 then
-	echo Prokka failed. Terminating
+	echo "Prokka failed. Terminating"
 	exit 1
 fi
 
@@ -114,8 +125,10 @@ if ! [ -z "$KOFAM" ]
 then
 	if [ -d "$OUT/kofam" ]
 	then
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
 		echo "${GREEN}KOfam scan has already been run. Skipping${NORM}"
 	else
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
 		echo "${GREEN}Running KOfam scan${NORM}"
 		THIS=$(grep "kofam: " $CONFIG \
 	        	| awk '{$1=""; print $0}' \
@@ -132,8 +145,10 @@ if "$DBCAN"
 then
         if [ -d "$OUT/dbcan2" ]
         then
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}dbCAN2 has already been run. Skipping${NORM}"
         else
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}Running dbCAN2${NORM}"
 		grep "ID=" ${OUT}/prokka/*\.gff > ${OUT}/prokka/trimmed.gff2
 		mkdir ${OUT}/dbcan2
@@ -149,8 +164,10 @@ if ! [ -z "$EGGNOG" ]
 then
         if [ -d "$OUT/eggnog" ]
         then
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}eggNOG-mapper has already been run. Skipping${NORM}"
         else
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}Running eggNOG-mapper. Warning! This is slow!${NORM}"
                 mkdir ${OUT}/eggnog
                 THIS=$(grep "eggnog: " $CONFIG \
@@ -165,10 +182,12 @@ if ! [ -z "$MEROPS" ]
 then
 	if [ -d "$OUT/merops" ]
         then
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}Merops search has already been run. Skipping${NORM}"
         else
 		mkdir ${OUT}/merops
-                echo "${GREEN}Running diamond search against MEROPS${NORM}"
+          	printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
+		echo "${GREEN}Running diamond search against MEROPS${NORM}"
                 THIS=$(grep "merops: " $CONFIG \
                         | awk '{$1=""; print $0}' \
                         | sed "s@ANNOTATION_OUT@${OUT}/merops/matches.m8@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@")
@@ -185,9 +204,11 @@ then
 	esac
         if [ -d "$OUT/signalp" ]
         then
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}SignalP has already been run. Skipping${NORM}"
         else
                 mkdir ${OUT}/signalp
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}Running SignalP${NORM}"
                 THIS=$(grep "signalp: " $CONFIG \
                         | awk '{$1=""; print $0}' \
@@ -201,9 +222,11 @@ if "$ANTISMASH"
 then
         if [ -d "$OUT/antismash" ]
         then
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}antiSMASH has already been run. Skipping${NORM}"
         else
                 mkdir ${OUT}/antismash
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}Running antiSMASH${NORM}"
                 THIS=$(grep "antismash: " $CONFIG \
                         | awk '{$1=""; print $0}' \
@@ -217,9 +240,11 @@ if "$RGI"
 then
         if [ -d "$OUT/rgi" ]
         then
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}RGI(CARD) has already been run. Skipping${NORM}"
         else
                 mkdir ${OUT}/rgi
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}Running RGI(CARD)${NORM}"
                 THIS=$(grep "rgi: " $CONFIG \
                         | awk '{$1=""; print $0}' \
@@ -233,9 +258,11 @@ if ! [ -z "$TNPPRED" ]
 then
         if [ -d "$OUT/tnppred" ]
         then
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}TnpPred has already been run. Skipping${NORM}"
         else
                 mkdir ${OUT}/tnppred
+		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
                 echo "${GREEN}Running TnpPred${NORM}"
                 THIS=$(grep "tnppred: " $CONFIG \
                         | awk '{$1=""; print $0}' \
@@ -245,6 +272,7 @@ then
 fi
 
 ### Put things together
+printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
 echo "${GREEN}Parsing output${NORM}"
 mkdir -p ${OUT}/parsed_tables
 
@@ -296,14 +324,18 @@ then
         	sort -k1,1 ${OUT}/parsed_tables/dbcan2.tabx | awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/dbcan2.tab
 		rm ${OUT}/parsed_tables/dbcan2.tabx
         	awk 'BEGIN {OFS="\t"}{print $1,$5}' ${OUT}/parsed_tables/dbcan2.tab > ${OUT}/da1
+	else
+		printf "X_00001\tNA\n" > ${OUT}/da1
+		touch ${OUT}/parsed_tables/dbcan2.tab
+	fi
+	if [[ $(wc -l <${OUT}/dbcan2/cgc.out) -gt 0 ]]
+	then
         	awk -F'\t' 'BEGIN {OFS="\t"}{print $9,$2}' ${OUT}/dbcan2/cgc.out \
                 	| awk 'NF>0' \
                 	| awk '$2 != "null"' \
                 	| sort -k1,1  > ${OUT}/da2
 	else
-		printf "X_00001\tNA\n" > ${OUT}/da1
 		printf "X_00001\tNA\n" > ${OUT}/da2
-		touch ${OUT}/parsed_tables/dbcan2.tab
 	fi
 	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/da1 > ${OUT}/temp1.tab
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp1.tab ${OUT}/da2 > ${OUT}/temp.tab
@@ -435,10 +467,11 @@ cat <(printf "#./annotate ") <(echo ${CLI}) <(printf "#") <(date) <(printf ${HEA
 rm ${OUT}/temp.tab
 
 ### Making Consensus table
+printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
 ${DIR}/consensus_annotation.py ${OUT}/overview.tab ${OUT}/consensus.tab ${HCHY}
 
 # Make README
-printf "#### Version 0.0.4 ####
+printf "#### Version 0.0.5 ####
 
 #### HEADERS consensus.tab ####
 CDS: Gene name given by prokka
@@ -505,5 +538,6 @@ Remaining version can be found in the environment.yml
 
 " > ${OUT}/README.txt
 
+printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
 echo "${GREEN}Done!${NORM}"
 
