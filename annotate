@@ -293,6 +293,9 @@ grep "ID=" ${OUT}/prokka/*.gff \
 		| sed 's/.*|X_//') |
 	awk -F'\t' 'BEGIN{OFS="\t"}{print $1,$3,$2}'> ${OUT}/parsed_tables/prokka.tab
 
+echo "Annotated genes:" > ${OUT}/stats.txt
+awk -F'\t' '$3 != "hypothetical protein"' ${OUT}/parsed_tables/prokka.tab | wc -l | sed 's/^/Prokka: /' >> ${OUT}/stats.txt
+
 cp ${OUT}/parsed_tables/prokka.tab ${OUT}/temp.tab
 HEADER="#CDS\tContig_Position\tAnnotation_prokka"
 cat <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/parsed_tables/prokka.tab
@@ -314,6 +317,7 @@ then
                 | awk 'NF>0' \
                 | paste <(awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/temp1.tab) - > ${OUT}/ka
         fi
+	cat ${OUT}/ka | wc -l | sed 's/^/KOfam: /' >> ${OUT}/stats.txt
 	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ka > ${OUT}/temp1.tab
 	mv ${OUT}/temp1.tab ${OUT}/temp.tab
 	rm ${OUT}/ka
@@ -344,6 +348,8 @@ then
 	else
 		printf "X_00001\tNA\n" > ${OUT}/da2
 	fi
+	cat ${OUT}/da1 | wc -l | sed 's/^/CAZys: /' >> ${OUT}/stats.txt
+	cat ${OUT}/da2 | wc -l | sed 's/^/CGC: /' >> ${OUT}/stats.txt
 	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/da1 > ${OUT}/temp1.tab
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp1.tab ${OUT}/da2 > ${OUT}/temp.tab
         rm ${OUT}/da1 ${OUT}/da2 ${OUT}/temp1.tab
@@ -363,6 +369,8 @@ then
         then
                 printf "X_00001\tNA\tNA\nNA\n" > ${OUT}/ea
         fi
+	awk -F'\t' '$2 != ""' ${OUT}/ea | wc -l | sed 's/^/eggNOG KO: /' >> ${OUT}/stats.txt
+	awk -F'\t' '$4 != ""' ${OUT}/ea | wc -l | sed 's/^/eggNOG Name: /' >> ${OUT}/stats.txt
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ea > ${OUT}/temp1.tab
         rm ${OUT}/ea
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
@@ -382,6 +390,7 @@ then
         then
                 printf "X_00001\tNA\n" > ${OUT}/ma
         fi
+	cat ${OUT}/ma | wc -l| sed 's/^/MEROPS: /' >> ${OUT}/stats.txt
 	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ma > ${OUT}/temp1.tab
         rm ${OUT}/ma
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
@@ -396,6 +405,7 @@ then
 	grep -v '^#' ${OUT}/signalp/output_summary.signalp5 \
 		| awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/signalp.tab
 	awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/parsed_tables/signalp.tab > ${OUT}/sa
+	awk -F'\t' '$2 != "OTHER"' ${OUT}/sa | wc -l | sed 's/^/SignalP: /' >> ${OUT}/stats.txt
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/sa > ${OUT}/temp1.tab
         rm ${OUT}/sa
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
@@ -421,6 +431,7 @@ then
 	then
 		printf "X_00001\tNA\n" > ${OUT}/aa
 	fi
+	cat ${OUT}/aa | wc -l | sed 's/^/antiSMASH: /' >> ${OUT}/stats.txt
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/aa > ${OUT}/temp1.tab
         rm ${OUT}/aa
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
@@ -440,6 +451,7 @@ then
 	else
 		printf "X_00001\tNA\n" > ${OUT}/parsed_tables/rgi.tab
 	fi
+	cat ${OUT}/parsed_tables/rgi.tab | wc -l | sed 's/^/RGI: /' >> ${OUT}/stats.txt
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/parsed_tables/rgi.tab > ${OUT}/temp1.tab
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
         HEADER=${HEADER}"\tRGI"
@@ -460,6 +472,7 @@ then
         then
                 printf "X_00001\tNA\n" > ${OUT}/ta
         fi
+	cat ${OUT}/ta | wc -l | sed 's/^/TnpPred: /' >> ${OUT}/stats.txt
         join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ta > ${OUT}/temp1.tab
         rm ${OUT}/ta
         mv ${OUT}/temp1.tab ${OUT}/temp.tab
