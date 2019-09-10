@@ -10,32 +10,32 @@ tools = list(sys.argv[3].split(","))
 
 # Define functions partioning data.frame in known and unknown fraction for each tool
 def prokka(dd):
-    return [dd[dd['Annotation_prokka'] != "hypothetical protein"][['#CDS','Contig_Position','Annotation_prokka']],
+    return [dd[dd['Annotation_prokka'] != "hypothetical protein"][['#CDS','Contig_Start_End_Strand','Annotation_prokka']],
             dd[dd['Annotation_prokka'] == "hypothetical protein"]]
 def kofamName(dd):
     dd1 = dd[dd['Annotation_KOfam'].notna()]
-    return [dd1[~dd1['Annotation_KOfam'].str.contains("uncharacterized")][['#CDS','Contig_Position','Annotation_KOfam']],
+    return [dd1[~dd1['Annotation_KOfam'].str.contains("uncharacterized")][['#CDS','Contig_Start_End_Strand','Annotation_KOfam']],
            dd[dd['Annotation_KOfam'].isna() | dd['Annotation_KOfam'].str.contains("uncharacterized")]]
 def kofamKO(dd):
-    return [dd[dd['KO_KOfam'].notna()][['#CDS','Contig_Position','KO_KOfam']],
+    return [dd[dd['KO_KOfam'].notna()][['#CDS','Contig_Start_End_Strand','KO_KOfam']],
             dd[dd['KO_KOfam'].isna()]]
 def dbcan(dd):
-    return [dd[dd['CAZy'].notna()][['#CDS','Contig_Position','CAZy']],
+    return [dd[dd['CAZy'].notna()][['#CDS','Contig_Start_End_Strand','CAZy']],
            dd[dd['CAZy'].isna()]]
 def eggnogName(dd):
-    return [dd[dd['Annotation_eggNOG'].notna()][['#CDS','Contig_Position','Annotation_eggNOG']],
+    return [dd[dd['Annotation_eggNOG'].notna()][['#CDS','Contig_Start_End_Strand','Annotation_eggNOG']],
             dd[dd['Annotation_eggNOG'].isna()]]
 def eggnogKO(dd):
-    return [dd[dd['KO_eggNOG'].notna()][['#CDS','Contig_Position','KO_eggNOG']],
+    return [dd[dd['KO_eggNOG'].notna()][['#CDS','Contig_Start_End_Strand','KO_eggNOG']],
             dd[dd['KO_eggNOG'].isna()]]
 def merops(dd):
-    return [dd[dd['MEROPS'].notna()][['#CDS','Contig_Position','MEROPS']],
+    return [dd[dd['MEROPS'].notna()][['#CDS','Contig_Start_End_Strand','MEROPS']],
            dd[dd['MEROPS'].isna()]]
 def rgi(dd):
-    return [dd[dd['RGI'].notna()][['#CDS','Contig_Position','RGI']],
+    return [dd[dd['RGI'].notna()][['#CDS','Contig_Start_End_Strand','RGI']],
             dd[dd['RGI'].isna()]]
 def tnppred(dd):
-    return [dd[dd['TnpPred'].notna()][['#CDS','Contig_Position','TnpPred']],
+    return [dd[dd['TnpPred'].notna()][['#CDS','Contig_Start_End_Strand','TnpPred']],
             dd[dd['TnpPred'].isna()]]
 
 # Switcher function to run sub-functions
@@ -75,7 +75,7 @@ for i in tools:
             tools_included.append(i)
     if i == 'eggnogKO':
         if 'KO_eggNOG' in cols:
-            tools_included.append(i)     
+            tools_included.append(i)
     if i == 'merops':
         if 'MEROPS' in cols:
             tools_included.append(i)
@@ -84,7 +84,7 @@ for i in tools:
             tools_included.append(i)
     if i == 'tnppred':
         if 'TnpPred' in cols:
-            tools_included.append(i)      
+            tools_included.append(i)
 
 # Nested loop of the annotations
 print "Getting consensus annotation with the following hierarchy:\n" + str(tools_included).replace(","," >")
@@ -97,13 +97,13 @@ for i in tools_included:
     knowns.append(sub[0])
 
 # Combine annotate in one data.frame
-df = pd.DataFrame(np.concatenate(knowns, axis=0), columns=['#CDS','Contig_Position','Annotation'])
+df = pd.DataFrame(np.concatenate(knowns, axis=0), columns=['#CDS','Contig_Start_End_Strand','Annotation'])
 
 print str(len(df)) + " out of " + str(len(dat)) + " CDSs annotated"
 
 # Add unknowns
-df_uk = dat[dat['#CDS'].isin(set(df['#CDS']).symmetric_difference(set(dat['#CDS'])))][['#CDS','Contig_Position','Annotation_prokka']]
-df_uk.columns = ['#CDS', 'Contig_Position', 'Annotation']
+df_uk = dat[dat['#CDS'].isin(set(df['#CDS']).symmetric_difference(set(dat['#CDS'])))][['#CDS','Contig_Start_End_Strand','Annotation_prokka']]
+df_uk.columns = ['#CDS', 'Contig_Start_End_Strand', 'Annotation']
 df_uk['Annotation'] = "NA"
 
 df = df.append(df_uk).sort_values('#CDS')

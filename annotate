@@ -289,7 +289,7 @@ grep "ID=" ${OUT}/prokka/*.gff \
 	| awk -F";" 'BEGIN {OFS="\t"}{for(i=1;i<=NF;i++){if ($i ~ /product=/){print $1,$i}}}' \
 	| sed 's/ID=//;s/product=//' \
 	| paste - <(grep "ID=" ${OUT}/prokka/*.gff \
-		| awk 'BEGIN{OFS="_"}{print $1,$4,$5}' \
+		| awk 'BEGIN{OFS="_"}{print $1,$4,$5,$7}' \
 		| sed 's/.*|X_//') |
 	awk -F'\t' 'BEGIN{OFS="\t"}{print $1,$3,$2}'> ${OUT}/parsed_tables/prokka.tab
 
@@ -297,7 +297,7 @@ echo "Annotated genes:" > ${OUT}/stats.txt
 awk -F'\t' '$3 != "hypothetical protein"' ${OUT}/parsed_tables/prokka.tab | wc -l | sed 's/^/Prokka: /' >> ${OUT}/stats.txt
 
 cp ${OUT}/parsed_tables/prokka.tab ${OUT}/temp.tab
-HEADER="#CDS\tContig_Position\tAnnotation_prokka"
+HEADER="#CDS\tContig_Start_End_Strand\tAnnotation_prokka"
 cat <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/parsed_tables/prokka.tab
 
 # KOfam
