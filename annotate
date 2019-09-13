@@ -11,7 +11,7 @@ O       o O       o O       o
 o       O o       O o       O
 
 .... Annotation pipeline ....
-....... Version 0.0.5 .......
+....... Version 0.0.6 .......
 ........ Jakob Russel .......
 ......... 2019 August .......
 
@@ -38,6 +38,7 @@ Example:
 " 1>&2; exit 1; }
 GREEN=$(tput setaf 2)
 NORM=$(tput sgr0)
+RED=$(tput setaf 1)
 
 CLI=$*
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -86,7 +87,7 @@ then
 	OUT=${PWD}/${OUT}
 fi
 
-echo "${GREEN}Running Annotation pipeline version 0.0.5...${NORM}"
+echo "${GREEN}Running Annotation pipeline version 0.0.6...${NORM}"
 
 # Check input file
 if [ ! -f "${FAS}" ]
@@ -105,7 +106,7 @@ fi
 
 # Run Prokka
 # Fix prokka problem
-export PERL5LIB="/mibi/users/russel/Software/miniconda2/envs/annotate/lib/perl5/site_perl/5.22.0"
+export PERL5LIB=$(grep "perl5lib: " $CONFIG | awk '{print $2}')
 
 if [ -d "${OUT}/prokka" ]
 then
@@ -329,7 +330,7 @@ fi
 # dbCAN2
 if "$DBCAN"
 then
-	if [[ $(wc -l <${OUT}/dbcan2/overview.txt) -gt 1 ]]
+	if [[ $(awk '$5 > 1' ${OUT}/dbcan2/overview.txt | wc -l) -gt 1 ]]
 	then
 		Rscript ${DIR}/parse_cazy.R ${OUT}/dbcan2/overview.txt ${OUT}/parsed_tables/dbcan2.tabx
         	sort -k1,1 ${OUT}/parsed_tables/dbcan2.tabx | awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/dbcan2.tab
@@ -490,8 +491,17 @@ rm ${OUT}/temp.tab
 printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
 ${DIR}/consensus_annotation.py ${OUT}/overview.tab ${OUT}/consensus.tab ${HCHY}
 
+### Check for duplicates
+LENCONS=$(awk '{print $3}' ${OUT}/consensus.tab | wc -l)
+LENCONSU=$(awk '{print $3}' ${OUT}/consensus.tab | uniq | wc -l)
+
+if [ $((($LENCONSU*100/$LENCONS))) -le 85 ] && ([[ "$HCHY" == *"prokka"* ]] || [[ "$HCHY" == *"eggnog"* ]] || [[ "$HCHY" == *"kofam"* ]])
+	then
+	echo "${RED}Warning: More than 30% of adjacent genes have similar annotations!${NORM}"
+fi
+
 # Make README
-printf "#### Version 0.0.5 ####
+printf "#### Version 0.0.6 ####
 
 #### HEADERS consensus.tab ####
 CDS: Gene name given by prokka
