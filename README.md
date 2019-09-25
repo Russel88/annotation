@@ -4,8 +4,6 @@ This is a pipeline to run multiple annnotation tools, and compile the output in 
 The pipeline is written to work optimally on our own server, and might be challenging to implement other places. 
 However, below are the different steps which should be enough to get things working.
 
-Caution: The script is not written in a "safe" way, that is, if something fails, so might the rest of the script, and useful error messages are not necessarily produced.
-
 ## Citation
 [![DOI](https://zenodo.org/badge/184105796.svg)](https://zenodo.org/badge/latestdoi/184105796)
 

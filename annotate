@@ -11,7 +11,7 @@ O       o O       o O       o
 o       O o       O o       O
 
 .... Annotation pipeline ....
-....... Version 0.0.6 .......
+....... Version 0.0.7 .......
 ........ Jakob Russel .......
 ......... 2019 August .......
 
@@ -87,7 +87,7 @@ then
 	OUT=${PWD}/${OUT}
 fi
 
-echo "${GREEN}Running Annotation pipeline version 0.0.6...${NORM}"
+echo "${GREEN}Running Annotation pipeline version 0.0.7...${NORM}"
 
 # Check input file
 if [ ! -f "${FAS}" ]
@@ -143,8 +143,11 @@ then
 	        	| sed "s@ANNOTATION_OUT@${OUT}/results@;s@ANNOTATION_FAS@${OUT}/prokka/*\.faa@;s@ANNOTATION_TMP@${OUT}/tmp@")
 		$THIS &>> ${OUT}/log.txt
 		mkdir ${OUT}/kofam
-		mv ${OUT}/results ${OUT}/kofam/results
-		mv ${OUT}/tmp/tabular/ ${OUT}/kofam
+		if [ -f ${OUT}/results ]
+		then
+			mv ${OUT}/results ${OUT}/kofam/results
+			mv ${OUT}/tmp/tabular/ ${OUT}/kofam
+		fi
 	fi
 fi
 
@@ -304,182 +307,230 @@ cat <(printf ${HEADER}"\n") ${OUT}/temp.tab > ${OUT}/parsed_tables/prokka.tab
 # KOfam
 if ! [ -z "$KOFAM" ]
 then
-	tail -n +3 ${OUT}/kofam/results \
-        	| sed 's/^*/ /' \
-		| awk 'BEGIN {OFS="\t"}1' \
-		| sort -k1,1 -u > ${OUT}/parsed_tables/kofam.tab
+	if [ -f ${OUT}/kofam/results ]
+	then
+		tail -n +3 ${OUT}/kofam/results \
+        		| sed 's/^*/ /' \
+			| awk 'BEGIN {OFS="\t"}1' \
+			| sort -k1,1 -u > ${OUT}/parsed_tables/kofam.tab
 
-	awk -v e=${KOFAM} '$5 < e' ${OUT}/parsed_tables/kofam.tab > ${OUT}/temp1.tab
-	if ! [ -s "${OUT}/temp1.tab" ]
-        then
-                printf "X_00001\tNA\n\tNA" > ${OUT}/ka
+		awk -v e=${KOFAM} '$5 < e' ${OUT}/parsed_tables/kofam.tab > ${OUT}/temp1.tab
+		if ! [ -s "${OUT}/temp1.tab" ]
+	        then
+        	        printf "X_00001\tNA\n\tNA" > ${OUT}/ka
+		else
+			awk '{print $1=$2=$3=$4=$5=""; print $0}' ${OUT}/temp1.tab \
+                	| awk 'NF>0' \
+	                | paste <(awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/temp1.tab) - > ${OUT}/ka
+        	fi
+		cat ${OUT}/ka | wc -l | sed 's/^/KOfam: /' >> ${OUT}/stats.txt
+		join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ka > ${OUT}/temp1.tab
+		mv ${OUT}/temp1.tab ${OUT}/temp.tab
+		rm ${OUT}/ka
+		HEADER=${HEADER}"\tKO_KOfam\tAnnotation_KOfam"
+		cat <(printf "#CDS\tKO\tMatch_length\tSimilarity\tE-value\tAnnotation\n") ${OUT}/parsed_tables/kofam.tab > ${OUT}/parsed_tables/kofam.tab1
+		mv ${OUT}/parsed_tables/kofam.tab1 ${OUT}/parsed_tables/kofam.tab
 	else
-		awk '{print $1=$2=$3=$4=$5=""; print $0}' ${OUT}/temp1.tab \
-                | awk 'NF>0' \
-                | paste <(awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/temp1.tab) - > ${OUT}/ka
-        fi
-	cat ${OUT}/ka | wc -l | sed 's/^/KOfam: /' >> ${OUT}/stats.txt
-	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ka > ${OUT}/temp1.tab
-	mv ${OUT}/temp1.tab ${OUT}/temp.tab
-	rm ${OUT}/ka
-	HEADER=${HEADER}"\tKO_KOfam\tAnnotation_KOfam"
-	cat <(printf "#CDS\tKO\tMatch_length\tSimilarity\tE-value\tAnnotation\n") ${OUT}/parsed_tables/kofam.tab > ${OUT}/parsed_tables/kofam.tab1
-	mv ${OUT}/parsed_tables/kofam.tab1 ${OUT}/parsed_tables/kofam.tab
+		rm -r ${OUT}/kofam/
+		echo "${RED}KOfam failed! Check the log for details${NORM}"
+	fi
 fi
 
 # dbCAN2
 if "$DBCAN"
 then
-	if [[ $(awk '$5 > 1' ${OUT}/dbcan2/overview.txt | wc -l) -gt 1 ]]
+	if [ -f ${OUT}/dbcan2/overview.txt ]
 	then
-		Rscript ${DIR}/parse_cazy.R ${OUT}/dbcan2/overview.txt ${OUT}/parsed_tables/dbcan2.tabx
-        	sort -k1,1 ${OUT}/parsed_tables/dbcan2.tabx | awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/dbcan2.tab
-		rm ${OUT}/parsed_tables/dbcan2.tabx
-        	awk 'BEGIN {OFS="\t"}{print $1,$5}' ${OUT}/parsed_tables/dbcan2.tab > ${OUT}/da1
+		if [[ $(awk '$5 > 1' ${OUT}/dbcan2/overview.txt | wc -l) -gt 1 ]]
+		then
+			Rscript ${DIR}/parse_cazy.R ${OUT}/dbcan2/overview.txt ${OUT}/parsed_tables/dbcan2.tabx
+        		sort -k1,1 ${OUT}/parsed_tables/dbcan2.tabx | awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/dbcan2.tab
+			rm ${OUT}/parsed_tables/dbcan2.tabx
+        		awk 'BEGIN {OFS="\t"}{print $1,$5}' ${OUT}/parsed_tables/dbcan2.tab > ${OUT}/da1
+		else
+			printf "X_00001\tNA\n" > ${OUT}/da1
+			touch ${OUT}/parsed_tables/dbcan2.tab
+		fi
+		if [[ $(wc -l <${OUT}/dbcan2/cgc.out) -gt 0 ]]
+		then
+        		awk -F'\t' 'BEGIN {OFS="\t"}{print $9,$2}' ${OUT}/dbcan2/cgc.out \
+                		| awk 'NF>0' \
+                		| awk '$2 != "null"' \
+                		| sort -k1,1  > ${OUT}/da2
+		else
+			printf "X_00001\tNA\n" > ${OUT}/da2
+		fi
+		cat ${OUT}/da1 | wc -l | sed 's/^/CAZys: /' >> ${OUT}/stats.txt
+		cat ${OUT}/da2 | wc -l | sed 's/^/CGC: /' >> ${OUT}/stats.txt
+		join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/da1 > ${OUT}/temp1.tab
+        	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp1.tab ${OUT}/da2 > ${OUT}/temp.tab
+   	     	rm ${OUT}/da1 ${OUT}/da2 ${OUT}/temp1.tab
+		HEADER=${HEADER}"\tCAZy\tCGC"
+		cat <(printf "#CDS\tHMMER_annotation\tHotPep_annotation\tDiamond_annotation\tConsensus_annotation\n") ${OUT}/parsed_tables/dbcan2.tab > ${OUT}/parsed_tables/dbcan2.tab1
+		mv ${OUT}/parsed_tables/dbcan2.tab1 ${OUT}/parsed_tables/dbcan2.tab
 	else
-		printf "X_00001\tNA\n" > ${OUT}/da1
-		touch ${OUT}/parsed_tables/dbcan2.tab
+		rm -r ${OUT}/dbcan2/
+		echo "${RED}dbCAN2 failed! Check the log for details${NORM}"
 	fi
-	if [[ $(wc -l <${OUT}/dbcan2/cgc.out) -gt 0 ]]
-	then
-        	awk -F'\t' 'BEGIN {OFS="\t"}{print $9,$2}' ${OUT}/dbcan2/cgc.out \
-                	| awk 'NF>0' \
-                	| awk '$2 != "null"' \
-                	| sort -k1,1  > ${OUT}/da2
-	else
-		printf "X_00001\tNA\n" > ${OUT}/da2
-	fi
-	cat ${OUT}/da1 | wc -l | sed 's/^/CAZys: /' >> ${OUT}/stats.txt
-	cat ${OUT}/da2 | wc -l | sed 's/^/CGC: /' >> ${OUT}/stats.txt
-	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/da1 > ${OUT}/temp1.tab
-        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp1.tab ${OUT}/da2 > ${OUT}/temp.tab
-        rm ${OUT}/da1 ${OUT}/da2 ${OUT}/temp1.tab
-	HEADER=${HEADER}"\tCAZy\tCGC"
-	cat <(printf "#CDS\tHMMER_annotation\tHotPep_annotation\tDiamond_annotation\tConsensus_annotation\n") ${OUT}/parsed_tables/dbcan2.tab > ${OUT}/parsed_tables/dbcan2.tab1
-	mv ${OUT}/parsed_tables/dbcan2.tab1 ${OUT}/parsed_tables/dbcan2.tab
 fi
 
 # eggNOG
 if ! [ -z "$EGGNOG" ]
 then
-	grep -v '^#' ${OUT}/eggnog/annotation.emapper.annotations \
-		| sed 's/ko://g' > $OUT/parsed_tables/eggnog.tab
-	awk -v k="$EGGNOG" '$3<k' $OUT/parsed_tables/eggnog.tab \
-		| awk -F'\t' 'BEGIN { OFS = "\t" }{print $1, $9, $5, $6}' > ${OUT}/ea
-        if ! [ -s "${OUT}/ea" ]
-        then
-                printf "X_00001\tNA\tNA\nNA\n" > ${OUT}/ea
-        fi
-	awk -F'\t' '$2 != ""' ${OUT}/ea | wc -l | sed 's/^/eggNOG KO: /' >> ${OUT}/stats.txt
-	awk -F'\t' '$4 != ""' ${OUT}/ea | wc -l | sed 's/^/eggNOG Name: /' >> ${OUT}/stats.txt
-        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ea > ${OUT}/temp1.tab
-        rm ${OUT}/ea
-        mv ${OUT}/temp1.tab ${OUT}/temp.tab
-        HEADER=${HEADER}"\tKO_eggNOG\tTax_eggNOG\tAnnotation_eggNOG"
-	cat <(sed -n '4p' ${OUT}/eggnog/annotation.emapper.annotations | sed 's/query_name/CDS/') $OUT/parsed_tables/eggnog.tab > $OUT/parsed_tables/eggnog.tab1
-	mv $OUT/parsed_tables/eggnog.tab1 $OUT/parsed_tables/eggnog.tab
+	if [ -f ${OUT}/eggnog/annotation.emapper.annotations ]
+	then
+		grep -v '^#' ${OUT}/eggnog/annotation.emapper.annotations \
+			| sed 's/ko://g' > $OUT/parsed_tables/eggnog.tab
+		awk -v k="$EGGNOG" '$3<k' $OUT/parsed_tables/eggnog.tab \
+			| awk -F'\t' 'BEGIN { OFS = "\t" }{print $1, $9, $5, $6}' > ${OUT}/ea
+        	if ! [ -s "${OUT}/ea" ]
+        	then
+                	printf "X_00001\tNA\tNA\nNA\n" > ${OUT}/ea
+        	fi
+		awk -F'\t' '$2 != ""' ${OUT}/ea | wc -l | sed 's/^/eggNOG KO: /' >> ${OUT}/stats.txt
+		awk -F'\t' '$4 != ""' ${OUT}/ea | wc -l | sed 's/^/eggNOG Name: /' >> ${OUT}/stats.txt
+	        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ea > ${OUT}/temp1.tab
+	        rm ${OUT}/ea
+	        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+	        HEADER=${HEADER}"\tKO_eggNOG\tTax_eggNOG\tAnnotation_eggNOG"
+		cat <(sed -n '4p' ${OUT}/eggnog/annotation.emapper.annotations | sed 's/query_name/CDS/') $OUT/parsed_tables/eggnog.tab > $OUT/parsed_tables/eggnog.tab1
+		mv $OUT/parsed_tables/eggnog.tab1 $OUT/parsed_tables/eggnog.tab
+	else
+		rm -r ${OUT}/eggnog/
+		echo "${RED}eggNOG failed! Check the log for details${NORM}"
+	fi
 fi
 
 # Merops
 if ! [ -z "$MEROPS" ]
 then
-	sort -k1,1 -k11,11g ${OUT}/merops/matches.m8 \
-		| sort -u -k1,1 \
-		| awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/merops.tab
-	awk -v k=${MEROPS} 'BEGIN {OFS="\t"} $11<k {print $1,$2}' ${OUT}/parsed_tables/merops.tab > ${OUT}/ma
-	if ! [ -s "${OUT}/ma" ]
-        then
-                printf "X_00001\tNA\n" > ${OUT}/ma
-        fi
-	cat ${OUT}/ma | wc -l| sed 's/^/MEROPS: /' >> ${OUT}/stats.txt
-	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ma > ${OUT}/temp1.tab
-        rm ${OUT}/ma
-        mv ${OUT}/temp1.tab ${OUT}/temp.tab
-        HEADER=${HEADER}"\tMEROPS"
-	cat <(printf "#CDS\tMEROPS\tPct_id\tAlign_length\tMismatches\tGaps\tQuery_start\tQuery_end\tSubject_start\tSubject_end\tE-value\tBit_score\n") ${OUT}/parsed_tables/merops.tab > ${OUT}/parsed_tables/merops.tab1
-	mv ${OUT}/parsed_tables/merops.tab1 ${OUT}/parsed_tables/merops.tab
+	if [ -f ${OUT}/merops/matches.m8 ]
+	then
+		sort -k1,1 -k11,11g ${OUT}/merops/matches.m8 \
+			| sort -u -k1,1 \
+			| awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/merops.tab
+		awk -v k=${MEROPS} 'BEGIN {OFS="\t"} $11<k {print $1,$2}' ${OUT}/parsed_tables/merops.tab > ${OUT}/ma
+		if ! [ -s "${OUT}/ma" ]
+	        then
+	                printf "X_00001\tNA\n" > ${OUT}/ma
+	        fi
+		cat ${OUT}/ma | wc -l| sed 's/^/MEROPS: /' >> ${OUT}/stats.txt
+		join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ma > ${OUT}/temp1.tab
+	        rm ${OUT}/ma
+	        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+	        HEADER=${HEADER}"\tMEROPS"
+		cat <(printf "#CDS\tMEROPS\tPct_id\tAlign_length\tMismatches\tGaps\tQuery_start\tQuery_end\tSubject_start\tSubject_end\tE-value\tBit_score\n") ${OUT}/parsed_tables/merops.tab > ${OUT}/parsed_tables/merops.tab1
+		mv ${OUT}/parsed_tables/merops.tab1 ${OUT}/parsed_tables/merops.tab
+	else
+		rm -r ${OUT}/merops/
+                echo "${RED}Diamond search against Merops failed! Check the log for details${NORM}"
+	fi
 fi
 
 # SignalP
 if ! [ -z "$SIGNALP" ]
 then
-	grep -v '^#' ${OUT}/signalp/output_summary.signalp5 \
-		| awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/signalp.tab
-	awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/parsed_tables/signalp.tab > ${OUT}/sa
-	awk -F'\t' '$2 != "OTHER"' ${OUT}/sa | wc -l | sed 's/^/SignalP: /' >> ${OUT}/stats.txt
-        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/sa > ${OUT}/temp1.tab
-        rm ${OUT}/sa
-        mv ${OUT}/temp1.tab ${OUT}/temp.tab
-        HEADER=${HEADER}"\tSignalP"
-	cat <(printf "#CDS\tAnnotation\tSP_probability\tTAT_probability\tLIPO_probability\tOTHER_probability\tCleavage_site\n") ${OUT}/parsed_tables/signalp.tab > ${OUT}/parsed_tables/signalp.tab1
-	mv ${OUT}/parsed_tables/signalp.tab1 ${OUT}/parsed_tables/signalp.tab
+	if [ -f ${OUT}/signalp/output_summary.signalp5 ]
+	then
+		grep -v '^#' ${OUT}/signalp/output_summary.signalp5 \
+			| awk 'BEGIN {OFS="\t"}1' > ${OUT}/parsed_tables/signalp.tab
+		awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/parsed_tables/signalp.tab > ${OUT}/sa
+		awk -F'\t' '$2 != "OTHER"' ${OUT}/sa | wc -l | sed 's/^/SignalP: /' >> ${OUT}/stats.txt
+	        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/sa > ${OUT}/temp1.tab
+	        rm ${OUT}/sa
+	        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+	        HEADER=${HEADER}"\tSignalP"
+		cat <(printf "#CDS\tAnnotation\tSP_probability\tTAT_probability\tLIPO_probability\tOTHER_probability\tCleavage_site\n") ${OUT}/parsed_tables/signalp.tab > ${OUT}/parsed_tables/signalp.tab1
+		mv ${OUT}/parsed_tables/signalp.tab1 ${OUT}/parsed_tables/signalp.tab
+	else
+		rm -r ${OUT}/signalp/
+                echo "${RED}SignalP failed! Check the log for details${NORM}"
+	fi
 fi
 
 # antiSMASH
 if "$ANTISMASH"
 then
-	if ! [ -s ${OUT}/antismash/geneclusters.txt ]
+	if [ -f ${OUT}/antismash/geneclusters.txt ]
 	then
-		printf "X_00001\tNA\n" > ${OUT}/aa
+		if ! [ -s ${OUT}/antismash/geneclusters.txt ]
+		then
+			printf "X_00001\tNA\n" > ${OUT}/aa
+		else
+			awk -F'\t' '{print $3,$4}' ${OUT}/antismash/geneclusters.txt \
+				| awk '{print $1 "_" NR, $2}' \
+				| awk '{gsub(";","\n"$1"\t")}1' \
+				| awk 'BEGIN {OFS="\t"}{print $2,$1}' > ${OUT}/aa
+			sed 's/_\([0-9]*\)$/\t\1/' ${OUT}/aa > ${OUT}/parsed_tables/antismash.tab
+		fi
+		if ! [ -s "${OUT}/aa" ]
+		then
+			printf "X_00001\tNA\n" > ${OUT}/aa
+		fi
+		cat ${OUT}/aa | wc -l | sed 's/^/antiSMASH: /' >> ${OUT}/stats.txt
+	        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/aa > ${OUT}/temp1.tab
+	        rm ${OUT}/aa
+	        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+	        HEADER=${HEADER}"\tantiSMASH"
+		cat <(printf "#CDS\tAnnotation\tCluster_ID\n") ${OUT}/parsed_tables/antismash.tab > ${OUT}/parsed_tables/antismash.tab1
+		mv ${OUT}/parsed_tables/antismash.tab1 ${OUT}/parsed_tables/antismash.tab
 	else
-		awk -F'\t' '{print $3,$4}' ${OUT}/antismash/geneclusters.txt \
-			| awk '{print $1 "_" NR, $2}' \
-			| awk '{gsub(";","\n"$1"\t")}1' \
-			| awk 'BEGIN {OFS="\t"}{print $2,$1}' > ${OUT}/aa
-		sed 's/_\([0-9]*\)$/\t\1/' ${OUT}/aa > ${OUT}/parsed_tables/antismash.tab
+		rm -r ${OUT}/antismash/
+                echo "${RED}antiSMASH failed! Check the log for details${NORM}"
 	fi
-	if ! [ -s "${OUT}/aa" ]
-	then
-		printf "X_00001\tNA\n" > ${OUT}/aa
-	fi
-	cat ${OUT}/aa | wc -l | sed 's/^/antiSMASH: /' >> ${OUT}/stats.txt
-        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/aa > ${OUT}/temp1.tab
-        rm ${OUT}/aa
-        mv ${OUT}/temp1.tab ${OUT}/temp.tab
-        HEADER=${HEADER}"\tantiSMASH"
-	cat <(printf "#CDS\tAnnotation\tCluster_ID\n") ${OUT}/parsed_tables/antismash.tab > ${OUT}/parsed_tables/antismash.tab1 
-	mv ${OUT}/parsed_tables/antismash.tab1 ${OUT}/parsed_tables/antismash.tab
 fi
 
 # RGI
 if "$RGI"
 then
-	if [[ $(wc -l <${OUT}/rgi/card.txt) -gt 1 ]]
+	if [ -f ${OUT}/rgi/card.txt ]
 	then
-		tail -n+2 ${OUT}/rgi/card.txt \
-			| awk -F'\t' 'BEGIN {OFS="\t"}{print $1,$2}' \
-			| sort -k1,1 > ${OUT}/parsed_tables/rgi.tab
+		if [[ $(wc -l <${OUT}/rgi/card.txt) -gt 1 ]]
+		then
+			tail -n+2 ${OUT}/rgi/card.txt \
+				| awk -F'\t' 'BEGIN {OFS="\t"}{print $1,$2}' \
+				| sort -k1,1 > ${OUT}/parsed_tables/rgi.tab
+		else
+			printf "X_00001\tNA\n" > ${OUT}/parsed_tables/rgi.tab
+		fi
+		cat ${OUT}/parsed_tables/rgi.tab | wc -l | sed 's/^/RGI: /' >> ${OUT}/stats.txt
+	        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/parsed_tables/rgi.tab > ${OUT}/temp1.tab
+	        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+	        HEADER=${HEADER}"\tRGI"
+		cat <(printf "#CDS\tAnnotation\n") ${OUT}/parsed_tables/rgi.tab > ${OUT}/parsed_tables/rgi.tab1
+		mv ${OUT}/parsed_tables/rgi.tab1 ${OUT}/parsed_tables/rgi.tab
 	else
-		printf "X_00001\tNA\n" > ${OUT}/parsed_tables/rgi.tab
+		rm -r ${OUT}/rgi/
+                echo "${RED}RGI failed! Check the log for details${NORM}"
 	fi
-	cat ${OUT}/parsed_tables/rgi.tab | wc -l | sed 's/^/RGI: /' >> ${OUT}/stats.txt
-        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/parsed_tables/rgi.tab > ${OUT}/temp1.tab
-        mv ${OUT}/temp1.tab ${OUT}/temp.tab
-        HEADER=${HEADER}"\tRGI"
-	cat <(printf "#CDS\tAnnotation\n") ${OUT}/parsed_tables/rgi.tab > ${OUT}/parsed_tables/rgi.tab1
-	mv ${OUT}/parsed_tables/rgi.tab1 ${OUT}/parsed_tables/rgi.tab
 fi
 
 # TnpPred
 if ! [ -z "$TNPPRED" ]
 then
-	grep -v "^#" ${OUT}/tnppred/output.tab \
-		| sort -k3,3 -k5,5g \
-		| sort -k3,3 -u \
-		| awk 'BEGIN {OFS="\t"}{print $3,$1,$5}' > ${OUT}/parsed_tables/tnppred.tab
-	awk -v k="${TNPPRED}" 'BEGIN {OFS="\t"} $3<k {print $1,$2}' ${OUT}/parsed_tables/tnppred.tab \
-		| sort -k1,1 > ${OUT}/ta
-	if ! [ -s "${OUT}/ta" ]
-        then
-                printf "X_00001\tNA\n" > ${OUT}/ta
-        fi
-	cat ${OUT}/ta | wc -l | sed 's/^/TnpPred: /' >> ${OUT}/stats.txt
-        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ta > ${OUT}/temp1.tab
-        rm ${OUT}/ta
-        mv ${OUT}/temp1.tab ${OUT}/temp.tab
-        HEADER=${HEADER}"\tTnpPred"
-	cat <(printf "#CDS\tTnpPredHMM\tE-value\n") ${OUT}/parsed_tables/tnppred.tab > ${OUT}/parsed_tables/tnppred.tab1
-	mv ${OUT}/parsed_tables/tnppred.tab1 ${OUT}/parsed_tables/tnppred.tab
+	if [ -f ${OUT}/tnppred/output.tab ]
+	then
+		grep -v "^#" ${OUT}/tnppred/output.tab \
+			| sort -k3,3 -k5,5g \
+			| sort -k3,3 -u \
+			| awk 'BEGIN {OFS="\t"}{print $3,$1,$5}' > ${OUT}/parsed_tables/tnppred.tab
+		awk -v k="${TNPPRED}" 'BEGIN {OFS="\t"} $3<k {print $1,$2}' ${OUT}/parsed_tables/tnppred.tab \
+			| sort -k1,1 > ${OUT}/ta
+		if ! [ -s "${OUT}/ta" ]
+	        then
+	                printf "X_00001\tNA\n" > ${OUT}/ta
+	        fi
+		cat ${OUT}/ta | wc -l | sed 's/^/TnpPred: /' >> ${OUT}/stats.txt
+	        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ta > ${OUT}/temp1.tab
+	        rm ${OUT}/ta
+	        mv ${OUT}/temp1.tab ${OUT}/temp.tab
+	        HEADER=${HEADER}"\tTnpPred"
+		cat <(printf "#CDS\tTnpPredHMM\tE-value\n") ${OUT}/parsed_tables/tnppred.tab > ${OUT}/parsed_tables/tnppred.tab1
+		mv ${OUT}/parsed_tables/tnppred.tab1 ${OUT}/parsed_tables/tnppred.tab
+	else
+		rm -r ${OUT}/tnppred/
+                echo "${RED}HMMER search against TnpPred failed! Check the log for details${NORM}"
+	fi
 fi
 
 
@@ -501,7 +552,7 @@ if [ $((($LENCONSU*100/$LENCONS))) -le 85 ] && ([[ "$HCHY" == *"prokka"* ]] || [
 fi
 
 # Make README
-printf "#### Version 0.0.6 ####
+printf "#### Version 0.0.7 ####
 
 #### HEADERS consensus.tab ####
 CDS: Gene name given by prokka
