@@ -323,7 +323,7 @@ then
                 	| awk 'NF>0' \
 	                | paste <(awk 'BEGIN {OFS="\t"}{print $1,$2}' ${OUT}/temp1.tab) - > ${OUT}/ka
         	fi
-		cat ${OUT}/ka | wc -l | sed 's/^/KOfam: /' >> ${OUT}/stats.txt
+		cat ${OUT}/ka | grep -P -v "X_00001\tNA\tNA" | wc -l | sed 's/^/KOfam: /' >> ${OUT}/stats.txt
 		join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ka > ${OUT}/temp1.tab
 		mv ${OUT}/temp1.tab ${OUT}/temp.tab
 		rm ${OUT}/ka
@@ -360,8 +360,8 @@ then
 		else
 			printf "X_00001\tNA\n" > ${OUT}/da2
 		fi
-		cat ${OUT}/da1 | wc -l | sed 's/^/CAZys: /' >> ${OUT}/stats.txt
-		cat ${OUT}/da2 | wc -l | sed 's/^/CGC: /' >> ${OUT}/stats.txt
+		cat ${OUT}/da1 | grep -P -v "X_00001\tNA" | wc -l | sed 's/^/CAZys: /' >> ${OUT}/stats.txt
+		cat ${OUT}/da2 | grep -P -v "X_00001\tNA" | wc -l | sed 's/^/CGC: /' >> ${OUT}/stats.txt
 		join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/da1 > ${OUT}/temp1.tab
         	join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp1.tab ${OUT}/da2 > ${OUT}/temp.tab
    	     	rm ${OUT}/da1 ${OUT}/da2 ${OUT}/temp1.tab
@@ -387,8 +387,8 @@ then
         	then
                 	printf "X_00001\tNA\tNA\nNA\n" > ${OUT}/ea
         	fi
-		awk -F'\t' '$2 != ""' ${OUT}/ea | wc -l | sed 's/^/eggNOG KO: /' >> ${OUT}/stats.txt
-		awk -F'\t' '$4 != ""' ${OUT}/ea | wc -l | sed 's/^/eggNOG Name: /' >> ${OUT}/stats.txt
+		awk -F'\t' '$2 != ""' ${OUT}/ea | grep -P -v "X_00001\tNA\tNA\tNA" | wc -l | sed 's/^/eggNOG KO: /' >> ${OUT}/stats.txt
+		awk -F'\t' '$4 != ""' ${OUT}/ea | grep -P -v "X_00001\tNA\tNA\tNA" | wc -l | sed 's/^/eggNOG Name: /' >> ${OUT}/stats.txt
 	        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ea > ${OUT}/temp1.tab
 	        rm ${OUT}/ea
 	        mv ${OUT}/temp1.tab ${OUT}/temp.tab
@@ -414,7 +414,7 @@ then
 	        then
 	                printf "X_00001\tNA\n" > ${OUT}/ma
 	        fi
-		cat ${OUT}/ma | wc -l| sed 's/^/MEROPS: /' >> ${OUT}/stats.txt
+		cat ${OUT}/ma | grep -P -v "X_00001\tNA" | wc -l | sed 's/^/MEROPS: /' >> ${OUT}/stats.txt
 		join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ma > ${OUT}/temp1.tab
 	        rm ${OUT}/ma
 	        mv ${OUT}/temp1.tab ${OUT}/temp.tab
@@ -467,7 +467,7 @@ then
 		then
 			printf "X_00001\tNA\n" > ${OUT}/aa
 		fi
-		cat ${OUT}/aa | wc -l | sed 's/^/antiSMASH: /' >> ${OUT}/stats.txt
+		cat ${OUT}/aa | grep -P -v "X_00001\tNA" | wc -l | sed 's/^/antiSMASH: /' >> ${OUT}/stats.txt
 	        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/aa > ${OUT}/temp1.tab
 	        rm ${OUT}/aa
 	        mv ${OUT}/temp1.tab ${OUT}/temp.tab
@@ -493,7 +493,7 @@ then
 		else
 			printf "X_00001\tNA\n" > ${OUT}/parsed_tables/rgi.tab
 		fi
-		cat ${OUT}/parsed_tables/rgi.tab | wc -l | sed 's/^/RGI: /' >> ${OUT}/stats.txt
+		cat ${OUT}/parsed_tables/rgi.tab | grep -P -v "X_00001\tNA" | wc -l | sed 's/^/RGI: /' >> ${OUT}/stats.txt
 	        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/parsed_tables/rgi.tab > ${OUT}/temp1.tab
 	        mv ${OUT}/temp1.tab ${OUT}/temp.tab
 	        HEADER=${HEADER}"\tRGI"
@@ -520,7 +520,7 @@ then
 	        then
 	                printf "X_00001\tNA\n" > ${OUT}/ta
 	        fi
-		cat ${OUT}/ta | wc -l | sed 's/^/TnpPred: /' >> ${OUT}/stats.txt
+		cat ${OUT}/ta | grep -P -v "X_00001\tNA" | wc -l | sed 's/^/TnpPred: /' >> ${OUT}/stats.txt
 	        join -t $'\t' -j 1 -a 1 -o auto -e "NA" ${OUT}/temp.tab ${OUT}/ta > ${OUT}/temp1.tab
 	        rm ${OUT}/ta
 	        mv ${OUT}/temp1.tab ${OUT}/temp.tab
@@ -543,8 +543,8 @@ printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
 ${DIR}/consensus_annotation.py ${OUT}/overview.tab ${OUT}/consensus.tab ${HCHY}
 
 ### Check for duplicates
-LENCONS=$(awk '{print $3}' ${OUT}/consensus.tab | wc -l)
-LENCONSU=$(awk '{print $3}' ${OUT}/consensus.tab | uniq | wc -l)
+LENCONS=$(awk -F'\t' '{print $3}' ${OUT}/consensus.tab | wc -l)
+LENCONSU=$(awk -F'\t' '{print $3}' ${OUT}/consensus.tab | uniq | wc -l)
 
 if [ $((($LENCONSU*100/$LENCONS))) -le 85 ] && ([[ "$HCHY" == *"prokka"* ]] || [[ "$HCHY" == *"eggnog"* ]] || [[ "$HCHY" == *"kofam"* ]])
 	then
