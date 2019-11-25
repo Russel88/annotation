@@ -10,13 +10,13 @@ perl5lib: /mibi/users/russel/Software/miniconda2/envs/annotate/lib/perl5/site_pe
 kofam: /mibi/users/russel/Software/kofam/exec_annotation --cpu=20 -o ANNOTATION_OUT --tmp-dir ANNOTATION_TMP ANNOTATION_FAS
 
 # dbCAN2
-dbcan: python /mibi/users/russel/Software/run_dbcan/run_dbcan.py --out_dir ANNOTATION_OUT --db_dir /mibi/users/russel/Databases/dbcan2 -c ANNOTATION_GFF ANNOTATION_FAS protein --dia_cpu 20 --hmm_cpu 20
+dbcan: python /mibi/users/russel/Software/run_dbcan/run_dbcan.py --out_dir ANNOTATION_OUT --db_dir /mibi/Databases/CAZy/dbcan2/dbcan2_2019_04_04 -c ANNOTATION_GFF ANNOTATION_FAS protein --dia_cpu 20 --hmm_cpu 20
 
 # eggNOG
-eggnog: python2 /mibi/users/russel/Software/eggnog-mapper/emapper.py --cpu 20 -m diamond --data_dir /mibi/users/russel/Databases/eggnog --dmnd_db /mibi/users/russel/Databases/eggnog/eggnog_proteins.dmnd --output_dir ANNOTATION_OUT --temp_dir ANNOTATION_TMP -i ANNOTATION_FAS -o annotation
+eggnog: python2 /mibi/users/russel/Software/eggnog-mapper/emapper.py --cpu 20 -m diamond --data_dir /mibi/Databases/eggnog/eggnog_2019_03_19 --dmnd_db /mibi/Databases/eggnog/eggnog_2019_03_19/eggnog_proteins.dmnd --output_dir ANNOTATION_OUT --temp_dir ANNOTATION_TMP -i ANNOTATION_FAS -o annotation
 
 # MEROPS
-merops: diamond blastp -p 20 --more-sensitive -d /mibi/users/russel/Databases/merops/merops -q ANNOTATION_FAS -o ANNOTATION_OUT
+merops: diamond blastp -p 20 --more-sensitive -d /mibi/Databases/merops/merops_12.0/merops_diamond_0.8.36 -q ANNOTATION_FAS -o ANNOTATION_OUT
 
 # signalp
 signalp: /mibi/users/russel/Software/signalp-5.0/bin/signalp -fasta ANNOTATION_FAS -org ANNOTATION_ORG -prefix ANNOTATION_OUT -tmp ANNOTATION_TMP

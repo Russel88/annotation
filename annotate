@@ -11,7 +11,7 @@ O       o O       o O       o
 o       O o       O o       O
 
 .... Annotation pipeline ....
-....... Version 0.0.7 .......
+....... Version 0.0.8 .......
 ........ Jakob Russel .......
 ......... 2019 August .......
 
@@ -87,7 +87,7 @@ then
 	OUT=${PWD}/${OUT}
 fi
 
-echo "${GREEN}Running Annotation pipeline version 0.0.7...${NORM}"
+echo "${GREEN}Running Annotation pipeline version 0.0.8...${NORM}"
 
 # Check input file
 if [ ! -f "${FAS}" ]
@@ -146,7 +146,9 @@ then
 		if [ -f ${OUT}/results ]
 		then
 			mv ${OUT}/results ${OUT}/kofam/results
-			mv ${OUT}/tmp/tabular/ ${OUT}/kofam
+			mv ${OUT}/tmp/tabular ${OUT}/kofam
+			tar -C ${OUT}/kofam -czf ${OUT}/kofam/tabular.tar.gz tabular/
+			rm -rf ${OUT}/kofam/tabular/
 		fi
 	fi
 fi
@@ -179,7 +181,7 @@ then
                 echo "${GREEN}eggNOG-mapper has already been run. Skipping${NORM}"
         else
 		printf "$(date '+%d/%m/%Y %H:%M:%S' | sed 's/^/[/;s/$/]: /')"
-                echo "${GREEN}Running eggNOG-mapper. Warning! This is slow!${NORM}"
+                echo "${GREEN}Running eggNOG-mapper (be patient!)${NORM}"
                 mkdir ${OUT}/eggnog
                 THIS=$(grep "eggnog: " $CONFIG \
                         | awk '{$1=""; print $0}' \
@@ -552,7 +554,7 @@ if [ $((($LENCONSU*100/$LENCONS))) -le 85 ] && ([[ "$HCHY" == *"prokka"* ]] || [
 fi
 
 # Make README
-printf "#### Version 0.0.7 ####
+printf "#### Version 0.0.8 ####
 
 #### HEADERS consensus.tab ####
 CDS: Gene name given by prokka
